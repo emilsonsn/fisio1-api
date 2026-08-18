@@ -2,8 +2,10 @@
 
 namespace App\Services\Gemini;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class GeminiClinicalAudioService
@@ -25,9 +27,25 @@ class GeminiClinicalAudioService
             ]],
             'generationConfig' => ['responseMimeType' => 'application/json', 'temperature' => 0.1],
         ];
-        $response = Http::acceptJson()->withHeaders(['x-goog-api-key' => $key])->timeout(180)->post('https://generativelanguage.googleapis.com/v1beta/models/'.config('services.gemini.model').':generateContent', $payload);
+        try {
+            $response = Http::acceptJson()->withHeaders(['x-goog-api-key' => $key])->timeout(180)->post('https://generativelanguage.googleapis.com/v1beta/models/'.config('services.gemini.model').':generateContent', $payload);
+        } catch (ConnectionException $exception) {
+            Log::warning('Gemini request could not be completed.', ['exception' => $exception::class, 'message' => $exception->getMessage(), 'model' => config('services.gemini.model')]);
+            throw new RuntimeException('Não foi possível conectar ao Gemini. Tente novamente em alguns instantes.', previous: $exception);
+        }
         if ($response->failed()) {
-            throw new RuntimeException('Não foi possível processar o áudio com Gemini.');
+            $error = $response->json('error', []);
+            Log::warning('Gemini rejected the clinical audio request.', [
+                'status' => $response->status(),
+                'provider_code' => data_get($error, 'code'),
+                'provider_status' => data_get($error, 'status'),
+                'provider_message' => str(data_get($error, 'message', 'Unknown Gemini error'))->limit(500)->toString(),
+                'model' => config('services.gemini.model'),
+                'audio_mime_type' => $audio->getMimeType(),
+                'audio_size_bytes' => $audio->getSize(),
+                'request_id' => $response->header('x-request-id'),
+            ]);
+            throw new RuntimeException('O Gemini recusou o processamento do áudio (HTTP '.$response->status().'). Consulte o log do servidor para o código retornado.');
         }
         $text = data_get($response->json(), 'candidates.0.content.parts.0.text');
         $result = is_string($text) ? json_decode($text, true) : null;

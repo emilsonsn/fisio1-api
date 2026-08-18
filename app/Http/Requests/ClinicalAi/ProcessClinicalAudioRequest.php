@@ -17,7 +17,7 @@ class ProcessClinicalAudioRequest extends FormRequest
             'patient_id' => ['required', 'integer', 'exists:patients,id'],
             'type' => ['required', 'in:initial_assessment,evolution'],
             'performed_at' => ['required', 'date', 'before_or_equal:today'],
-            'audio' => ['required', 'file', 'max:102400']
+            'audio' => ['required', 'file', 'max:102400'],
         ];
     }
 }
