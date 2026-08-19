@@ -1,0 +1,13 @@
+[program:fisio1-clinical-ai]
+process_name=%(program_name)s_%(process_num)02d
+directory=/var/www/fisio1-api
+command=php artisan queue:work database --queue=clinical-ai --sleep=1 --tries=4 --timeout=150 --max-time=3600
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+user=www-data
+numprocs=7
+redirect_stderr=true
+stdout_logfile=/var/www/fisio1-api/storage/logs/clinical-ai-worker.log
+stopwaitsecs=180

@@ -14,93 +14,31 @@ class GeminiClinicalInteractionService
 
     private const TRANSIENT_STATUSES = [429, 500, 502, 503, 504];
 
-    public function transcribe(array $file, string $mimeType): string
-    {
-        $uri = data_get($file, 'uri');
-
-        if (! is_string($uri) || $uri === '') {
-            throw new RuntimeException('O Gemini não retornou uma URI válida para o bloco de áudio.');
-        }
-
-        foreach ($this->models() as $index => $model) {
-            $response = $this->requestPayload([
-                'model' => $model,
-                'input' => [
-                    ['type' => 'text', 'text' => 'Transcreva integralmente este trecho de áudio em português do Brasil. Retorne somente a transcrição, sem resumo, comentários ou formatação adicional.'],
-                    ['type' => str_starts_with($mimeType, 'video/') ? 'video' : 'audio', 'uri' => $uri, 'mime_type' => $mimeType],
-                ],
-            ], $model);
-
-            if (! $response->failed()) {
-                $transcript = trim($this->outputText($response));
-
-                if ($transcript === '') {
-                    throw new RuntimeException('O Gemini retornou uma transcrição vazia para um bloco de áudio.');
-                }
-
-                return $transcript;
-            }
-
-            if ($index === 0 && $this->isTransient($response)) {
-                continue;
-            }
-
-            $this->throwIfFailed($response, $model);
-        }
-
-        throw new RuntimeException('Não foi possível transcrever o bloco de áudio com Gemini.');
-    }
-
     public function generateFromTranscript(string $transcript, string $type): array
     {
         if (trim($transcript) === '') {
             throw new RuntimeException('Não há transcrição para organizar no prontuário.');
         }
 
-        foreach ($this->models() as $index => $model) {
-            $response = $this->requestPayload([
-                'model' => $model,
-                'input' => [[
-                    'type' => 'text',
-                    'text' => $this->prompt()."\n\nTranscrição integral do atendimento:\n".$transcript,
-                ]],
-                'response_format' => $this->responseFormat($type),
-            ], $model);
-
-            if (! $response->failed()) {
-                return $this->parse($response, $model, null);
-            }
-
-            if ($index === 0 && $this->isTransient($response)) {
-                continue;
-            }
-
-            $this->throwIfFailed($response, $model);
-        }
-
-        throw new RuntimeException('Não foi possível organizar a transcrição com Gemini.');
-    }
-
-    public function generate(array $file, string $mimeType, string $type): array
-    {
-        $uri = data_get($file, 'uri');
-
-        if (! is_string($uri) || $uri === '') {
-            throw new RuntimeException('O Gemini não retornou uma URI válida para o áudio enviado.');
-        }
-
         try {
             foreach ($this->models() as $index => $model) {
-                $response = $this->request($uri, $mimeType, $type, $model);
+                $response = $this->requestPayload([
+                    'model' => $model,
+                    'input' => [[
+                        'type' => 'text',
+                        'text' => $this->prompt()."\n\nTranscrição integral do atendimento:\n".$transcript,
+                    ]],
+                    'response_format' => $this->responseFormat($type),
+                ], $model);
 
-                if (! $response->failed()) {
-                    return $this->parse($response, $model, data_get($file, 'name'));
+                if ($response->successful()) {
+                    return $this->parse($response, $model);
                 }
 
                 if ($index === 0 && $this->isTransient($response)) {
-                    Log::warning('Primary Gemini model failed transiently; trying configured fallback.', [
+                    Log::warning('Primary Gemini extraction model failed transiently; trying fallback.', [
                         'primary_model' => $model,
-                        'fallback_model' => config('services.gemini.fallback_model'),
+                        'fallback_model' => config('services.gemini.extraction_fallback_model'),
                         'status' => $response->status(),
                     ]);
 
@@ -110,61 +48,43 @@ class GeminiClinicalInteractionService
                 $this->throwIfFailed($response, $model);
             }
         } catch (ConnectionException $exception) {
-            Log::warning('Gemini interaction request could not be completed.', [
+            Log::warning('Gemini clinical extraction request could not be completed.', [
                 'exception' => $exception::class,
-                'message' => $exception->getMessage(),
+                'message' => str($exception->getMessage())->limit(500)->toString(),
             ]);
 
-            throw new RuntimeException('Não foi possível conectar ao Gemini. Tente novamente em alguns instantes.', previous: $exception);
+            throw new RuntimeException('Não foi possível conectar ao Gemini para organizar o prontuário.', previous: $exception);
         }
 
-        throw new RuntimeException('Não foi possível processar o áudio com Gemini.');
-    }
-
-    private function request(string $uri, string $mimeType, string $type, string $model): Response
-    {
-        $payload = [
-            'model' => $model,
-            'input' => [
-                ['type' => 'text', 'text' => $this->prompt()],
-                ['type' => str_starts_with($mimeType, 'video/') ? 'video' : 'audio', 'uri' => $uri, 'mime_type' => $mimeType],
-            ],
-            'response_format' => $this->responseFormat($type),
-        ];
-
-        return $this->requestPayload($payload, $model);
+        throw new RuntimeException('Não foi possível organizar a transcrição com Gemini.');
     }
 
     private function requestPayload(array $payload, string $model): Response
     {
-        for ($attempt = 1; $attempt <= 3; $attempt++) {
-            $response = Http::acceptJson()
-                ->withHeaders(['x-goog-api-key' => $this->apiKey()])
-                ->timeout(180)
-                ->post(self::API_URL.'/interactions', $payload);
+        $startedAt = microtime(true);
+        $response = Http::acceptJson()
+            ->withHeaders(['x-goog-api-key' => $this->apiKey()])
+            ->connectTimeout(10)
+            ->timeout((int) config('services.gemini.request_timeout', 60))
+            ->post(self::API_URL.'/interactions', $payload);
 
-            if (! $this->isTransient($response) || $attempt === 3) {
-                return $response;
-            }
+        Log::info('Gemini clinical extraction request completed.', [
+            'model' => $model,
+            'status' => $response->status(),
+            'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            'request_id' => $response->header('x-request-id'),
+        ]);
 
-            Log::info('Retrying transient Gemini interaction failure.', [
-                'attempt' => $attempt,
-                'status' => $response->status(),
-                'model' => $model,
-            ]);
-
-            sleep($attempt * 2);
-        }
+        return $response;
     }
 
-    private function parse(Response $response, string $model, mixed $remoteFile): array
+    private function parse(Response $response, string $model): array
     {
         $result = json_decode($this->outputText($response), true);
 
         if (! is_array($result) || ! is_array($result['fields'] ?? null)) {
             Log::warning('Gemini returned an invalid clinical structured response.', [
                 'model' => $model,
-                'remote_file' => $remoteFile,
                 'response_id' => $response->json('id'),
             ]);
 
@@ -185,30 +105,20 @@ class GeminiClinicalInteractionService
             return $outputText;
         }
 
-        $textParts = [];
-
-        foreach ($response->json('steps', []) as $step) {
-            if (data_get($step, 'type') !== 'model_output') {
-                continue;
-            }
-
-            foreach (data_get($step, 'content', []) as $content) {
-                $text = data_get($content, 'type') === 'text' ? data_get($content, 'text') : null;
-
-                if (is_string($text)) {
-                    $textParts[] = $text;
-                }
-            }
-        }
-
-        return implode('', $textParts);
+        return collect($response->json('steps', []))
+            ->where('type', 'model_output')
+            ->flatMap(fn (array $step) => data_get($step, 'content', []))
+            ->filter(fn (array $content) => data_get($content, 'type') === 'text')
+            ->pluck('text')
+            ->filter(fn ($text) => is_string($text))
+            ->implode('');
     }
 
     private function models(): array
     {
         return array_values(array_unique(array_filter([
-            config('services.gemini.model'),
-            config('services.gemini.fallback_model'),
+            config('services.gemini.extraction_model'),
+            config('services.gemini.extraction_fallback_model'),
         ], fn ($model) => is_string($model) && $model !== '')));
     }
 
@@ -221,7 +131,7 @@ class GeminiClinicalInteractionService
     {
         $error = $response->json('error', []);
 
-        Log::warning('Gemini interaction rejected the clinical audio request.', [
+        Log::warning('Gemini rejected the clinical extraction request.', [
             'status' => $response->status(),
             'provider_code' => data_get($error, 'code'),
             'provider_status' => data_get($error, 'status'),
@@ -230,7 +140,7 @@ class GeminiClinicalInteractionService
             'request_id' => $response->header('x-request-id'),
         ]);
 
-        throw new RuntimeException('O Gemini recusou o processamento do áudio (HTTP '.$response->status().'). Consulte o log do servidor para o código retornado.');
+        throw new RuntimeException('O Gemini recusou a organização do prontuário (HTTP '.$response->status().'). Consulte o log do servidor.');
     }
 
     private function apiKey(): string
@@ -246,7 +156,7 @@ class GeminiClinicalInteractionService
 
     private function prompt(): string
     {
-        return 'Transcreva integralmente este áudio em português do Brasil e extraia exclusivamente dados clínicos explicitamente informados. Não invente informações. Para campos não citados, use string vazia; para campos numéricos ausentes, use null.';
+        return 'Extraia exclusivamente os dados clínicos explicitamente informados na transcrição. Não invente informações. Para campos não citados, use string vazia; para campos numéricos ausentes, use null.';
     }
 
     private function responseFormat(string $type): array
@@ -268,7 +178,6 @@ class GeminiClinicalInteractionService
             : ['indication', 'birthplace', 'marital_status', 'gender', 'profession', 'address', 'chief_complaint', 'condition_history', 'life_habits', 'personal_family_history', 'previous_treatments', 'physical_examination', 'complementary_exams', 'physical_therapy_diagnosis', 'cbdf', 'resources_methods_techniques', 'therapeutic_objectives', 'physical_therapy_prognosis'];
 
         $schema = array_fill_keys($stringFields, ['type' => 'string']);
-
         $schema[$type === 'evolution' ? 'pain_level' : 'planned_sessions'] = [
             'type' => 'integer',
             'nullable' => true,

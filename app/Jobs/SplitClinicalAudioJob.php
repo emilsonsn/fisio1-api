@@ -19,13 +19,13 @@ class SplitClinicalAudioJob implements ShouldQueue
 
     public int $tries = 2;
 
-    public int $timeout = 900;
+    public int $timeout = 150;
 
     public function __construct(public readonly int $processId) {}
 
     public function middleware(): array
     {
-        return [(new WithoutOverlapping('clinical-ai-split-'.$this->processId))->expireAfter(1200)];
+        return [(new WithoutOverlapping('clinical-ai-split-'.$this->processId))->expireAfter(180)];
     }
 
     public function handle(ClinicalAudioSplitter $splitter): void

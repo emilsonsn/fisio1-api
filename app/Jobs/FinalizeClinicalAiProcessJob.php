@@ -20,18 +20,18 @@ class FinalizeClinicalAiProcessJob implements ShouldQueue
 
     public int $tries = 4;
 
-    public int $timeout = 600;
+    public int $timeout = 150;
 
     public function __construct(public readonly int $processId) {}
 
     public function backoff(): array
     {
-        return [60, 180, 600];
+        return [10, 30, 90];
     }
 
     public function middleware(): array
     {
-        return [(new WithoutOverlapping('clinical-ai-finalize-'.$this->processId))->expireAfter(900)];
+        return [(new WithoutOverlapping('clinical-ai-finalize-'.$this->processId))->expireAfter(180)];
     }
 
     public function handle(GeminiClinicalInteractionService $gemini, ClinicalRecordFields $recordFields): void

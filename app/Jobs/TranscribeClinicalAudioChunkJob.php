@@ -21,18 +21,18 @@ class TranscribeClinicalAudioChunkJob implements ShouldQueue
 
     public int $tries = 4;
 
-    public int $timeout = 600;
+    public int $timeout = 150;
 
     public function __construct(public readonly int $chunkId) {}
 
     public function backoff(): array
     {
-        return [60, 180, 600];
+        return [10, 30, 90];
     }
 
     public function middleware(): array
     {
-        return [(new WithoutOverlapping('clinical-ai-chunk-'.$this->chunkId))->expireAfter(900)];
+        return [(new WithoutOverlapping('clinical-ai-chunk-'.$this->chunkId))->expireAfter(180)];
     }
 
     public function handle(GeminiAudioTranscriptionService $gemini, ClinicalAiProcessCoordinator $coordinator): void

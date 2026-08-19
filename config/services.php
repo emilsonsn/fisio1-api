@@ -36,15 +36,21 @@ return [
     ],
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY'),
-        'model' => env('GEMINI_MODEL', 'gemini-3.5-flash-lite'),
-        'fallback_model' => env('GEMINI_FALLBACK_MODEL', 'gemini-3.6-flash'),
+        'transcription_model' => env('GEMINI_TRANSCRIPTION_MODEL', 'gemini-3.1-flash-lite'),
+        'transcription_fallback_model' => env('GEMINI_TRANSCRIPTION_FALLBACK_MODEL', 'gemini-3.5-flash-lite'),
+        'extraction_model' => env('GEMINI_EXTRACTION_MODEL', env('GEMINI_MODEL', 'gemini-3.5-flash-lite')),
+        'extraction_fallback_model' => env('GEMINI_EXTRACTION_FALLBACK_MODEL', env('GEMINI_FALLBACK_MODEL', 'gemini-3.6-flash')),
+        'request_timeout' => (int) env('GEMINI_REQUEST_TIMEOUT', 60),
+        'transcription_max_output_tokens' => (int) env('GEMINI_TRANSCRIPTION_MAX_OUTPUT_TOKENS', 4096),
+        'inline_max_bytes' => (int) env('GEMINI_INLINE_MAX_BYTES', 14680064),
         'project' => env('GOOGLE_CLOUD_PROJECT'),
         'project_number' => env('GOOGLE_CLOUD_PROJECT_NUMBER'),
     ],
     'clinical_ai' => [
         'ffmpeg_binary' => env('FFMPEG_BINARY', 'ffmpeg'),
-        'ffmpeg_timeout' => (int) env('FFMPEG_TIMEOUT', 900),
+        'ffmpeg_timeout' => (int) env('FFMPEG_TIMEOUT', 120),
         'chunk_seconds' => (int) env('CLINICAL_AI_CHUNK_SECONDS', 300),
+        'worker_processes' => (int) env('CLINICAL_AI_WORKER_PROCESSES', 7),
     ],
 
 ];
