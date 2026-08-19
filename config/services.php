@@ -41,5 +41,10 @@ return [
         'project' => env('GOOGLE_CLOUD_PROJECT'),
         'project_number' => env('GOOGLE_CLOUD_PROJECT_NUMBER'),
     ],
+    'clinical_ai' => [
+        'ffmpeg_binary' => env('FFMPEG_BINARY', 'ffmpeg'),
+        'ffmpeg_timeout' => (int) env('FFMPEG_TIMEOUT', 900),
+        'chunk_seconds' => (int) env('CLINICAL_AI_CHUNK_SECONDS', 300),
+    ],
 
 ];

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\ClinicalRecordStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\PatientAssessment\StorePatientAssessmentRequest;
 use App\Http\Requests\PatientAssessment\UpdatePatientAssessmentRequest;
@@ -15,7 +16,7 @@ class PatientAssessmentController extends Controller
 {
     public function index(Request $request)
     {
-        $query = PatientAssessment::query()->with(['patient', 'professional', 'attachments'])->latest('assessed_at');
+        $query = PatientAssessment::query()->with(['patient', 'professional', 'attachments', 'aiProcess'])->latest('assessed_at');
         $query->when($request->filled('patient_id'), fn ($q) => $q->where('patient_id', $request->integer('patient_id')))
             ->when($request->filled('search'), fn ($q) => $q->whereHas('patient', fn ($patient) => $patient->where('name', 'like', '%'.$request->string('search').'%')));
 
@@ -27,12 +28,12 @@ class PatientAssessmentController extends Controller
         $assessment = PatientAssessment::create([...$request->safe()->except('attachments'), 'professional_id' => $request->user()->id]);
         $this->storeAttachments($request, $assessment);
 
-        return new PatientAssessmentResource($assessment->load(['patient', 'professional', 'attachments']));
+        return new PatientAssessmentResource($assessment->load(['patient', 'professional', 'attachments', 'aiProcess']));
     }
 
     public function show(PatientAssessment $assessment): PatientAssessmentResource
     {
-        return new PatientAssessmentResource($assessment->load(['patient', 'professional', 'attachments']));
+        return new PatientAssessmentResource($assessment->load(['patient', 'professional', 'attachments', 'aiProcess']));
     }
 
     public function update(UpdatePatientAssessmentRequest $request, PatientAssessment $assessment): PatientAssessmentResource
@@ -41,7 +42,21 @@ class PatientAssessmentController extends Controller
         $assessment->update($request->safe()->except('attachments'));
         $this->storeAttachments($request, $assessment);
 
-        return new PatientAssessmentResource($assessment->load(['patient', 'professional', 'attachments']));
+        return new PatientAssessmentResource($assessment->load(['patient', 'professional', 'attachments', 'aiProcess']));
+    }
+
+    public function confirm(UpdatePatientAssessmentRequest $request, PatientAssessment $assessment): PatientAssessmentResource
+    {
+        $this->authorizeRecord($request, $assessment->professional_id);
+        abort_unless($assessment->status === ClinicalRecordStatus::InReview, 422, 'A avaliação ainda não está disponível para revisão.');
+        $assessment->update($request->safe()->except('attachments') + [
+            'status' => ClinicalRecordStatus::Completed,
+            'confirmed_by' => $request->user()->id,
+            'confirmed_at' => now(),
+        ]);
+        $this->storeAttachments($request, $assessment);
+
+        return new PatientAssessmentResource($assessment->load(['patient', 'professional', 'attachments', 'aiProcess']));
     }
 
     public function destroy(Request $request, PatientAssessment $assessment): Response

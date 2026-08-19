@@ -31,16 +31,19 @@ Route::prefix('v1')->group(function (): void {
         Route::get('patients/{patient}/history.pdf', [ClinicalRecordController::class, 'exportPatientHistory'])->middleware('permission:patients.export')->name('patients.history.pdf');
         Route::get('clinical-records', [ClinicalRecordController::class, 'index'])->middleware('permission:clinical_records.view');
         Route::post('clinical-ai/process-audio', [ClinicalAiController::class, 'processAudio'])->middleware('permission:clinical_records.create');
+        Route::post('clinical-ai/processes/{process}/retry', [ClinicalAiController::class, 'retry'])->middleware('permission:clinical_records.update');
 
         Route::get('assessments', [PatientAssessmentController::class, 'index'])->middleware('permission:clinical_records.view');
         Route::post('assessments', [PatientAssessmentController::class, 'store'])->middleware('permission:clinical_records.create');
         Route::get('assessments/{assessment}', [PatientAssessmentController::class, 'show'])->middleware('permission:clinical_records.view');
         Route::match(['put', 'patch'], 'assessments/{assessment}', [PatientAssessmentController::class, 'update'])->middleware('permission:clinical_records.update');
+        Route::post('assessments/{assessment}/confirm', [PatientAssessmentController::class, 'confirm'])->middleware('permission:clinical_records.update');
         Route::delete('assessments/{assessment}', [PatientAssessmentController::class, 'destroy'])->middleware('permission:clinical_records.delete');
         Route::get('evolutions', [PatientEvolutionController::class, 'index'])->middleware('permission:clinical_records.view');
         Route::post('evolutions', [PatientEvolutionController::class, 'store'])->middleware('permission:clinical_records.create');
         Route::get('evolutions/{evolution}', [PatientEvolutionController::class, 'show'])->middleware('permission:clinical_records.view');
         Route::match(['put', 'patch'], 'evolutions/{evolution}', [PatientEvolutionController::class, 'update'])->middleware('permission:clinical_records.update');
+        Route::post('evolutions/{evolution}/confirm', [PatientEvolutionController::class, 'confirm'])->middleware('permission:clinical_records.update');
         Route::delete('evolutions/{evolution}', [PatientEvolutionController::class, 'destroy'])->middleware('permission:clinical_records.delete');
         Route::get('record-attachments/{recordAttachment}/download', [RecordAttachmentController::class, 'download'])->middleware('permission:attachments.download')->name('record-attachments.download');
         Route::delete('record-attachments/{recordAttachment}', [RecordAttachmentController::class, 'destroy'])->middleware('permission:clinical_records.update');

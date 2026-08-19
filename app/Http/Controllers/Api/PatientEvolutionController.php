@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\ClinicalRecordStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\PatientEvolution\StorePatientEvolutionRequest;
 use App\Http\Requests\PatientEvolution\UpdatePatientEvolutionRequest;
@@ -15,7 +16,7 @@ class PatientEvolutionController extends Controller
 {
     public function index(Request $request)
     {
-        $query = PatientEvolution::query()->with(['patient', 'professional', 'attachments'])->latest('evolved_at');
+        $query = PatientEvolution::query()->with(['patient', 'professional', 'attachments', 'aiProcess'])->latest('evolved_at');
         $query->when($request->filled('patient_id'), fn ($q) => $q->where('patient_id', $request->integer('patient_id')))
             ->when($request->filled('search'), fn ($q) => $q->whereHas('patient', fn ($patient) => $patient->where('name', 'like', '%'.$request->string('search').'%')));
 
@@ -27,12 +28,12 @@ class PatientEvolutionController extends Controller
         $evolution = PatientEvolution::create([...$request->safe()->except('attachments'), 'professional_id' => $request->user()->id]);
         $this->storeAttachments($request, $evolution);
 
-        return new PatientEvolutionResource($evolution->load(['patient', 'professional', 'attachments']));
+        return new PatientEvolutionResource($evolution->load(['patient', 'professional', 'attachments', 'aiProcess']));
     }
 
     public function show(PatientEvolution $evolution): PatientEvolutionResource
     {
-        return new PatientEvolutionResource($evolution->load(['patient', 'professional', 'attachments']));
+        return new PatientEvolutionResource($evolution->load(['patient', 'professional', 'attachments', 'aiProcess']));
     }
 
     public function update(UpdatePatientEvolutionRequest $request, PatientEvolution $evolution): PatientEvolutionResource
@@ -41,7 +42,21 @@ class PatientEvolutionController extends Controller
         $evolution->update($request->safe()->except('attachments'));
         $this->storeAttachments($request, $evolution);
 
-        return new PatientEvolutionResource($evolution->load(['patient', 'professional', 'attachments']));
+        return new PatientEvolutionResource($evolution->load(['patient', 'professional', 'attachments', 'aiProcess']));
+    }
+
+    public function confirm(UpdatePatientEvolutionRequest $request, PatientEvolution $evolution): PatientEvolutionResource
+    {
+        $this->authorizeRecord($request, $evolution->professional_id);
+        abort_unless($evolution->status === ClinicalRecordStatus::InReview, 422, 'A evolução ainda não está disponível para revisão.');
+        $evolution->update($request->safe()->except('attachments') + [
+            'status' => ClinicalRecordStatus::Completed,
+            'confirmed_by' => $request->user()->id,
+            'confirmed_at' => now(),
+        ]);
+        $this->storeAttachments($request, $evolution);
+
+        return new PatientEvolutionResource($evolution->load(['patient', 'professional', 'attachments', 'aiProcess']));
     }
 
     public function destroy(Request $request, PatientEvolution $evolution): Response

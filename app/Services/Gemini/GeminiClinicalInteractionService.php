@@ -14,6 +14,73 @@ class GeminiClinicalInteractionService
 
     private const TRANSIENT_STATUSES = [429, 500, 502, 503, 504];
 
+    public function transcribe(array $file, string $mimeType): string
+    {
+        $uri = data_get($file, 'uri');
+
+        if (! is_string($uri) || $uri === '') {
+            throw new RuntimeException('O Gemini não retornou uma URI válida para o bloco de áudio.');
+        }
+
+        foreach ($this->models() as $index => $model) {
+            $response = $this->requestPayload([
+                'model' => $model,
+                'input' => [
+                    ['type' => 'text', 'text' => 'Transcreva integralmente este trecho de áudio em português do Brasil. Retorne somente a transcrição, sem resumo, comentários ou formatação adicional.'],
+                    ['type' => str_starts_with($mimeType, 'video/') ? 'video' : 'audio', 'uri' => $uri, 'mime_type' => $mimeType],
+                ],
+            ], $model);
+
+            if (! $response->failed()) {
+                $transcript = trim($this->outputText($response));
+
+                if ($transcript === '') {
+                    throw new RuntimeException('O Gemini retornou uma transcrição vazia para um bloco de áudio.');
+                }
+
+                return $transcript;
+            }
+
+            if ($index === 0 && $this->isTransient($response)) {
+                continue;
+            }
+
+            $this->throwIfFailed($response, $model);
+        }
+
+        throw new RuntimeException('Não foi possível transcrever o bloco de áudio com Gemini.');
+    }
+
+    public function generateFromTranscript(string $transcript, string $type): array
+    {
+        if (trim($transcript) === '') {
+            throw new RuntimeException('Não há transcrição para organizar no prontuário.');
+        }
+
+        foreach ($this->models() as $index => $model) {
+            $response = $this->requestPayload([
+                'model' => $model,
+                'input' => [[
+                    'type' => 'text',
+                    'text' => $this->prompt()."\n\nTranscrição integral do atendimento:\n".$transcript,
+                ]],
+                'response_format' => $this->responseFormat($type),
+            ], $model);
+
+            if (! $response->failed()) {
+                return $this->parse($response, $model, null);
+            }
+
+            if ($index === 0 && $this->isTransient($response)) {
+                continue;
+            }
+
+            $this->throwIfFailed($response, $model);
+        }
+
+        throw new RuntimeException('Não foi possível organizar a transcrição com Gemini.');
+    }
+
     public function generate(array $file, string $mimeType, string $type): array
     {
         $uri = data_get($file, 'uri');
@@ -65,6 +132,11 @@ class GeminiClinicalInteractionService
             'response_format' => $this->responseFormat($type),
         ];
 
+        return $this->requestPayload($payload, $model);
+    }
+
+    private function requestPayload(array $payload, string $model): Response
+    {
         for ($attempt = 1; $attempt <= 3; $attempt++) {
             $response = Http::acceptJson()
                 ->withHeaders(['x-goog-api-key' => $this->apiKey()])
@@ -87,7 +159,7 @@ class GeminiClinicalInteractionService
 
     private function parse(Response $response, string $model, mixed $remoteFile): array
     {
-        $result = json_decode((string) $response->json('output_text'), true);
+        $result = json_decode($this->outputText($response), true);
 
         if (! is_array($result) || ! is_array($result['fields'] ?? null)) {
             Log::warning('Gemini returned an invalid clinical structured response.', [
@@ -103,6 +175,33 @@ class GeminiClinicalInteractionService
             'transcript' => (string) ($result['transcript'] ?? ''),
             'fields' => $result['fields'],
         ];
+    }
+
+    private function outputText(Response $response): string
+    {
+        $outputText = $response->json('output_text');
+
+        if (is_string($outputText) && $outputText !== '') {
+            return $outputText;
+        }
+
+        $textParts = [];
+
+        foreach ($response->json('steps', []) as $step) {
+            if (data_get($step, 'type') !== 'model_output') {
+                continue;
+            }
+
+            foreach (data_get($step, 'content', []) as $content) {
+                $text = data_get($content, 'type') === 'text' ? data_get($content, 'text') : null;
+
+                if (is_string($text)) {
+                    $textParts[] = $text;
+                }
+            }
+        }
+
+        return implode('', $textParts);
     }
 
     private function models(): array
