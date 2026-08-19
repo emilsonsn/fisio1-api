@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\PatientAssessment\StorePatientAssessmentRequest;
 use App\Http\Requests\PatientAssessment\UpdatePatientAssessmentRequest;
 use App\Http\Resources\PatientAssessmentResource;
+use App\Models\Patient;
 use App\Models\PatientAssessment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -25,7 +26,13 @@ class PatientAssessmentController extends Controller
 
     public function store(StorePatientAssessmentRequest $request): PatientAssessmentResource
     {
-        $assessment = PatientAssessment::create([...$request->safe()->except('attachments'), 'professional_id' => $request->user()->id]);
+        $payload = $request->safe()->except('attachments');
+        $patient = Patient::findOrFail($payload['patient_id']);
+        $assessment = PatientAssessment::create([
+            ...$patient->only(Patient::DEMOGRAPHIC_FIELDS),
+            ...$payload,
+            'professional_id' => $request->user()->id,
+        ]);
         $this->storeAttachments($request, $assessment);
 
         return new PatientAssessmentResource($assessment->load(['patient', 'professional', 'attachments', 'aiProcess']));

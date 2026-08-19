@@ -18,7 +18,44 @@ class ClinicalApiTest extends TestCase
         $token = $this->postJson('/api/v1/auth/login', ['email' => $user->email, 'password' => 'andre'])->assertOk()->assertJsonFragment(['groups.manage'])->json('data.token');
 
         $headers = ['Authorization' => 'Bearer '.$token];
-        $patientId = $this->postJson('/api/v1/patients', ['name' => 'Maria Silva', 'document' => '12345678900', 'birth_date' => '1990-01-01', 'phone' => '85999999999'], $headers)->assertCreated()->json('data.id');
+        $patientId = $this->postJson('/api/v1/patients', [
+            'name' => 'Maria Silva',
+            'document' => '12345678900',
+            'birth_date' => '1990-01-01',
+            'phone' => '85999999999',
+            'indication' => 'Dr. Carlos',
+            'birthplace' => 'Fortaleza/CE',
+            'marital_status' => 'Casada',
+            'gender' => 'Feminino',
+            'profession' => 'Professora',
+            'address' => 'Rua das Flores, 100',
+        ], $headers)
+            ->assertCreated()
+            ->assertJsonPath('data.indication', 'Dr. Carlos')
+            ->assertJsonPath('data.birthplace', 'Fortaleza/CE')
+            ->assertJsonPath('data.marital_status', 'Casada')
+            ->assertJsonPath('data.gender', 'Feminino')
+            ->assertJsonPath('data.profession', 'Professora')
+            ->assertJsonPath('data.address', 'Rua das Flores, 100')
+            ->json('data.id');
+
+        $this->patchJson('/api/v1/patients/'.$patientId, [
+            'profession' => 'Coordenadora pedagógica',
+            'address' => 'Avenida Central, 200',
+        ], $headers)
+            ->assertOk()
+            ->assertJsonPath('data.profession', 'Coordenadora pedagógica')
+            ->assertJsonPath('data.address', 'Avenida Central, 200');
+
+        $this->postJson('/api/v1/assessments', [
+            'patient_id' => $patientId,
+            'assessed_at' => now()->toDateString(),
+        ], $headers)
+            ->assertCreated()
+            ->assertJsonPath('data.indication', 'Dr. Carlos')
+            ->assertJsonPath('data.birthplace', 'Fortaleza/CE')
+            ->assertJsonPath('data.profession', 'Coordenadora pedagógica')
+            ->assertJsonPath('data.address', 'Avenida Central, 200');
 
         $this->postJson('/api/v1/clinical-records', ['patient_id' => $patientId, 'type' => 'initial_assessment', 'performed_at' => now()->toDateString(), 'pain_level' => 6, 'complaint' => 'Dor lombar', 'conduct' => 'Exercícios terapêuticos'], $headers)->assertCreated()->assertJsonPath('data.patient.id', $patientId)->assertJsonPath('data.professional.id', $user->id);
     }

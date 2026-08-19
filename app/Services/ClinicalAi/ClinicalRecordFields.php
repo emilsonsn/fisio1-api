@@ -2,6 +2,7 @@
 
 namespace App\Services\ClinicalAi;
 
+use App\Models\Patient;
 use App\Models\PatientAssessment;
 use App\Models\PatientEvolution;
 use Illuminate\Database\Eloquent\Model;
@@ -20,7 +21,13 @@ class ClinicalRecordFields
     public function onlyFor(Model $record, array $fields): array
     {
         return collect($record instanceof PatientAssessment ? self::ASSESSMENT : self::EVOLUTION)
-            ->mapWithKeys(fn (string $field) => [$field => $fields[$field] ?? null])
+            ->mapWithKeys(function (string $field) use ($fields, $record): array {
+                if ($record instanceof PatientAssessment && in_array($field, Patient::DEMOGRAPHIC_FIELDS, true) && $record->getAttribute($field) !== null) {
+                    return [$field => $record->getAttribute($field)];
+                }
+
+                return [$field => $fields[$field] ?? null];
+            })
             ->all();
     }
 }

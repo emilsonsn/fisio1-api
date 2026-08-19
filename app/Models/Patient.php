@@ -7,10 +7,19 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-#[Fillable(['name', 'document', 'birth_date', 'phone', 'email', 'notes', 'photo_path'])]
+#[Fillable(['name', 'document', 'birth_date', 'phone', 'indication', 'birthplace', 'marital_status', 'gender', 'profession', 'address', 'email', 'notes', 'photo_path'])]
 class Patient extends Model
 {
     use SoftDeletes;
+
+    public const DEMOGRAPHIC_FIELDS = [
+        'indication',
+        'birthplace',
+        'marital_status',
+        'gender',
+        'profession',
+        'address',
+    ];
 
     protected function casts(): array
     {

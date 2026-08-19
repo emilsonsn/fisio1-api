@@ -13,6 +13,7 @@ use App\Jobs\FinalizeClinicalAiProcessJob;
 use App\Jobs\SplitClinicalAudioJob;
 use App\Jobs\TranscribeClinicalAudioChunkJob;
 use App\Models\ClinicalAiProcess;
+use App\Models\Patient;
 use App\Models\PatientAssessment;
 use App\Models\PatientEvolution;
 use Illuminate\Http\JsonResponse;
@@ -38,7 +39,11 @@ class ClinicalAiController extends Controller
 
                 $record = $request->string('type')->toString() === 'evolution'
                     ? PatientEvolution::create($attributes + ['evolved_at' => $request->date('performed_at')])
-                    : PatientAssessment::create($attributes + ['assessed_at' => $request->date('performed_at')]);
+                    : PatientAssessment::create([
+                        ...$attributes,
+                        ...Patient::findOrFail($attributes['patient_id'])->only(Patient::DEMOGRAPHIC_FIELDS),
+                        'assessed_at' => $request->date('performed_at'),
+                    ]);
 
                 $process = $record->aiProcess()->create([
                     'status' => ClinicalAiProcessStatus::Pending,
