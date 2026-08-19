@@ -2,10 +2,13 @@
 
 namespace App\Jobs;
 
+use App\Enums\AuditEventCategory;
 use App\Enums\ClinicalAiChunkStatus;
 use App\Enums\ClinicalAiProcessStatus;
 use App\Enums\ClinicalRecordStatus;
 use App\Models\ClinicalAiChunk;
+use App\Models\User;
+use App\Services\Audit\AuditLogger;
 use App\Services\ClinicalAi\ClinicalAiProcessCoordinator;
 use App\Services\Gemini\GeminiAudioTranscriptionService;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -58,5 +61,14 @@ class TranscribeClinicalAudioChunkJob implements ShouldQueue
         $chunk?->update(['status' => ClinicalAiChunkStatus::Failed, 'error_message' => $message]);
         $chunk?->process?->update(['status' => ClinicalAiProcessStatus::Failed, 'error_message' => $message, 'failed_at' => now()]);
         $chunk?->process?->processable?->update(['status' => ClinicalRecordStatus::Failed]);
+
+        if ($chunk?->process?->processable) {
+            app(AuditLogger::class)->record(
+                AuditEventCategory::AiProcessingFailed,
+                $chunk->process->processable,
+                metadata: ['process_id' => $chunk->process->id, 'chunk_id' => $chunk->id, 'error' => $message],
+                user: User::query()->find($chunk->process->processable->professional_id),
+            );
+        }
     }
 }

@@ -69,8 +69,10 @@ class PatientAssessmentController extends Controller
     public function destroy(Request $request, PatientAssessment $assessment): Response
     {
         $this->authorizeRecord($request, $assessment->professional_id);
-        $assessment->attachments->each(fn ($attachment) => Storage::disk($attachment->disk)->delete($attachment->path));
-        $assessment->attachments()->delete();
+        $assessment->attachments->each(function ($attachment): void {
+            Storage::disk($attachment->disk)->delete($attachment->path);
+            $attachment->delete();
+        });
         $assessment->delete();
 
         return response()->noContent();

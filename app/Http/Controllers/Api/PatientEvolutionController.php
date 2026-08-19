@@ -62,8 +62,10 @@ class PatientEvolutionController extends Controller
     public function destroy(Request $request, PatientEvolution $evolution): Response
     {
         $this->authorizeRecord($request, $evolution->professional_id);
-        $evolution->attachments->each(fn ($attachment) => Storage::disk($attachment->disk)->delete($attachment->path));
-        $evolution->attachments()->delete();
+        $evolution->attachments->each(function ($attachment): void {
+            Storage::disk($attachment->disk)->delete($attachment->path);
+            $attachment->delete();
+        });
         $evolution->delete();
 
         return response()->noContent();

@@ -2,9 +2,12 @@
 
 namespace App\Jobs;
 
+use App\Enums\AuditEventCategory;
 use App\Enums\ClinicalAiProcessStatus;
 use App\Enums\ClinicalRecordStatus;
 use App\Models\ClinicalAiProcess;
+use App\Models\User;
+use App\Services\Audit\AuditLogger;
 use App\Services\ClinicalAi\ClinicalRecordFields;
 use App\Services\Gemini\GeminiClinicalInteractionService;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -34,7 +37,7 @@ class FinalizeClinicalAiProcessJob implements ShouldQueue
         return [(new WithoutOverlapping('clinical-ai-finalize-'.$this->processId))->expireAfter(180)];
     }
 
-    public function handle(GeminiClinicalInteractionService $gemini, ClinicalRecordFields $recordFields): void
+    public function handle(GeminiClinicalInteractionService $gemini, ClinicalRecordFields $recordFields, AuditLogger $audit): void
     {
         $process = ClinicalAiProcess::query()->with(['processable', 'chunks'])->findOrFail($this->processId);
 
@@ -57,6 +60,12 @@ class FinalizeClinicalAiProcessJob implements ShouldQueue
         $disk = Storage::disk($process->audio_disk);
         $disk->delete($process->audio_path);
         $process->chunks->each(fn ($chunk) => Storage::disk($chunk->disk)->delete($chunk->path));
+        $audit->record(
+            AuditEventCategory::AiProcessingCompleted,
+            $process->processable,
+            metadata: ['process_id' => $process->id, 'chunks_count' => $process->chunks_count],
+            user: User::query()->find($process->processable->professional_id),
+        );
     }
 
     public function failed(?Throwable $exception): void
@@ -65,5 +74,14 @@ class FinalizeClinicalAiProcessJob implements ShouldQueue
         $message = str($exception?->getMessage())->limit(1000)->toString();
         $process?->update(['status' => ClinicalAiProcessStatus::Failed, 'error_message' => $message, 'failed_at' => now()]);
         $process?->processable?->update(['status' => ClinicalRecordStatus::Failed]);
+
+        if ($process?->processable) {
+            app(AuditLogger::class)->record(
+                AuditEventCategory::AiProcessingFailed,
+                $process->processable,
+                metadata: ['process_id' => $process->id, 'error' => $message],
+                user: User::query()->find($process->processable->professional_id),
+            );
+        }
     }
 }

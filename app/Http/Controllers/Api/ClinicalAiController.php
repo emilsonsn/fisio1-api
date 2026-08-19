@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\AuditEventCategory;
 use App\Enums\ClinicalAiChunkStatus;
 use App\Enums\ClinicalAiProcessStatus;
 use App\Enums\ClinicalRecordStatus;
@@ -16,6 +17,7 @@ use App\Models\ClinicalAiProcess;
 use App\Models\Patient;
 use App\Models\PatientAssessment;
 use App\Models\PatientEvolution;
+use App\Services\Audit\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +26,8 @@ use Throwable;
 
 class ClinicalAiController extends Controller
 {
+    public function __construct(private readonly AuditLogger $audit) {}
+
     public function processAudio(ProcessClinicalAudioRequest $request): JsonResponse
     {
         $audio = $request->file('audio');
@@ -64,6 +68,12 @@ class ClinicalAiController extends Controller
         }
 
         $record->load(['patient', 'professional', 'attachments', 'aiProcess']);
+        $this->audit->record(AuditEventCategory::AiProcessingStarted, $record, metadata: [
+            'process_id' => $record->aiProcess?->id,
+            'record_type' => $request->string('type')->toString(),
+            'audio_mime_type' => $audio->getMimeType(),
+            'audio_size' => $audio->getSize(),
+        ]);
         $resource = $record instanceof PatientEvolution
             ? new PatientEvolutionResource($record)
             : new PatientAssessmentResource($record);
@@ -102,6 +112,10 @@ class ClinicalAiController extends Controller
             $process->update(['status' => ClinicalAiProcessStatus::Consolidating]);
             FinalizeClinicalAiProcessJob::dispatch($process->id)->onQueue('clinical-ai')->afterCommit();
         });
+
+        $this->audit->record(AuditEventCategory::AiProcessingRetried, $process->processable, metadata: [
+            'process_id' => $process->id,
+        ]);
 
         return response()->json(['message' => 'Processamento reenfileirado com sucesso.'], 202);
     }

@@ -2,10 +2,13 @@
 
 namespace App\Jobs;
 
+use App\Enums\AuditEventCategory;
 use App\Enums\ClinicalAiChunkStatus;
 use App\Enums\ClinicalAiProcessStatus;
 use App\Enums\ClinicalRecordStatus;
 use App\Models\ClinicalAiProcess;
+use App\Models\User;
+use App\Services\Audit\AuditLogger;
 use App\Services\ClinicalAi\ClinicalAudioSplitter;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -63,5 +66,14 @@ class SplitClinicalAudioJob implements ShouldQueue
         $process = ClinicalAiProcess::query()->find($this->processId);
         $process?->update(['status' => ClinicalAiProcessStatus::Failed, 'error_message' => str($exception?->getMessage())->limit(1000), 'failed_at' => now()]);
         $process?->processable?->update(['status' => ClinicalRecordStatus::Failed]);
+
+        if ($process?->processable) {
+            app(AuditLogger::class)->record(
+                AuditEventCategory::AiProcessingFailed,
+                $process->processable,
+                metadata: ['process_id' => $process->id, 'error' => str($exception?->getMessage())->limit(1000)->toString()],
+                user: User::query()->find($process->processable->professional_id),
+            );
+        }
     }
 }

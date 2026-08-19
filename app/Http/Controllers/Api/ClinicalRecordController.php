@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\AuditEventCategory;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ClinicalRecord\StoreClinicalRecordRequest;
 use App\Http\Requests\ClinicalRecord\UpdateClinicalRecordRequest;
@@ -9,6 +10,7 @@ use App\Http\Resources\ClinicalRecordResource;
 use App\Models\ClinicalAttachment;
 use App\Models\ClinicalRecord;
 use App\Models\Patient;
+use App\Services\Audit\AuditLogger;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -16,6 +18,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ClinicalRecordController extends Controller
 {
+    public function __construct(private readonly AuditLogger $audit) {}
+
     public function index(Request $request)
     {
         $query = ClinicalRecord::query()->with(['patient', 'professional', 'attachments'])->latest('performed_at');
@@ -51,7 +55,10 @@ class ClinicalRecordController extends Controller
     public function destroy(Request $request, ClinicalRecord $clinicalRecord): Response
     {
         abort_unless($request->user()->hasPermission('clinical_records.manage_all') || $clinicalRecord->professional_id === $request->user()->id, 403);
-        $clinicalRecord->attachments->each(fn (ClinicalAttachment $attachment) => Storage::disk($attachment->disk)->delete($attachment->path));
+        $clinicalRecord->attachments->each(function (ClinicalAttachment $attachment): void {
+            Storage::disk($attachment->disk)->delete($attachment->path);
+            $attachment->delete();
+        });
         $clinicalRecord->delete();
 
         return response()->noContent();
@@ -59,12 +66,15 @@ class ClinicalRecordController extends Controller
 
     public function downloadAttachment(ClinicalAttachment $attachment)
     {
+        $this->audit->record(AuditEventCategory::AttachmentDownloaded, $attachment);
+
         return Storage::disk($attachment->disk)->download($attachment->path, $attachment->original_name);
     }
 
     public function exportPatientHistory(Patient $patient)
     {
         $patient->load(['clinicalRecords' => fn ($query) => $query->with('professional')->orderBy('performed_at')]);
+        $this->audit->record(AuditEventCategory::PatientHistoryExported, $patient);
 
         return Pdf::loadView('pdf.patient-history', compact('patient'))->download('historico-'.$patient->id.'.pdf');
     }

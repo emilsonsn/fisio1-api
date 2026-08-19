@@ -49,6 +49,11 @@ class User extends Authenticatable
         return $this->hasMany(PatientEvolution::class, 'professional_id');
     }
 
+    public function auditLogs(): HasMany
+    {
+        return $this->hasMany(AuditLog::class);
+    }
+
     public function accessGroups(): BelongsToMany
     {
         return $this->belongsToMany(AccessGroup::class);

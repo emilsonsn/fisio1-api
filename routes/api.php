@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AccessGroupController;
+use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ClinicalAiController;
 use App\Http\Controllers\Api\ClinicalRecordController;
@@ -53,6 +54,8 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('clinical-records/{clinicalRecord}', [ClinicalRecordController::class, 'destroy'])->middleware('permission:clinical_records.delete');
         Route::get('attachments/{attachment}/download', [ClinicalRecordController::class, 'downloadAttachment'])->middleware('permission:attachments.download')->name('attachments.download');
         Route::get('permissions', PermissionController::class)->middleware('permission:permissions.view');
+        Route::get('audit-logs/options', [AuditLogController::class, 'options'])->middleware(['admin', 'permission:audit_logs.view']);
+        Route::get('audit-logs', [AuditLogController::class, 'index'])->middleware(['admin', 'permission:audit_logs.view']);
         Route::get('groups', [AccessGroupController::class, 'index'])->middleware('permission:groups.view');
         Route::post('groups', [AccessGroupController::class, 'store'])->middleware('permission:groups.manage');
         Route::get('groups/{accessGroup}', [AccessGroupController::class, 'show'])->middleware('permission:groups.view');
