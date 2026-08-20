@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\ClinicalRecordStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ClinicalRecord\CancelClinicalRecordRequest;
 use App\Http\Requests\PatientEvolution\StorePatientEvolutionRequest;
 use App\Http\Requests\PatientEvolution\UpdatePatientEvolutionRequest;
 use App\Http\Resources\PatientEvolutionResource;
 use App\Models\PatientEvolution;
+use App\Services\ClinicalRecords\CancelClinicalRecord;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\Response;
@@ -39,8 +41,24 @@ class PatientEvolutionController extends Controller
     public function update(UpdatePatientEvolutionRequest $request, PatientEvolution $evolution): PatientEvolutionResource
     {
         $this->authorizeRecord($request, $evolution->professional_id);
+        abort_unless(
+            in_array($evolution->status, [ClinicalRecordStatus::InReview, ClinicalRecordStatus::Completed], true),
+            422,
+            'Somente evoluções em revisão ou concluídas podem ser editadas.',
+        );
         $evolution->update($request->safe()->except('attachments'));
         $this->storeAttachments($request, $evolution);
+
+        return new PatientEvolutionResource($evolution->load(['patient', 'professional', 'attachments', 'aiProcess']));
+    }
+
+    public function cancel(
+        CancelClinicalRecordRequest $request,
+        PatientEvolution $evolution,
+        CancelClinicalRecord $canceller,
+    ): PatientEvolutionResource {
+        $this->authorizeRecord($request, $evolution->professional_id);
+        $evolution = $canceller->handle($evolution, $request->user(), $request->validated('reason'));
 
         return new PatientEvolutionResource($evolution->load(['patient', 'professional', 'attachments', 'aiProcess']));
     }

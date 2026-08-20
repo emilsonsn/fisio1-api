@@ -8,4 +8,5 @@ enum ClinicalRecordStatus: string
     case InReview = 'in_review';
     case Completed = 'completed';
     case Failed = 'failed';
+    case Cancelled = 'cancelled';
 }

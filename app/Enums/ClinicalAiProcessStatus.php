@@ -10,4 +10,5 @@ enum ClinicalAiProcessStatus: string
     case Consolidating = 'consolidating';
     case Completed = 'completed';
     case Failed = 'failed';
+    case Cancelled = 'cancelled';
 }

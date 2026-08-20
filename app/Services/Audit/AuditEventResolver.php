@@ -36,12 +36,16 @@ class AuditEventResolver
             Patient::class => AuditEventCategory::PatientUpdated,
             User::class => AuditEventCategory::UserUpdated,
             AccessGroup::class => AuditEventCategory::AccessGroupUpdated,
-            PatientAssessment::class => $this->wasConfirmed($model)
-                ? AuditEventCategory::AssessmentConfirmed
-                : AuditEventCategory::AssessmentUpdated,
-            PatientEvolution::class => $this->wasConfirmed($model)
-                ? AuditEventCategory::EvolutionConfirmed
-                : AuditEventCategory::EvolutionUpdated,
+            PatientAssessment::class => match (true) {
+                $this->statusChangedTo($model, ClinicalRecordStatus::Completed) => AuditEventCategory::AssessmentConfirmed,
+                $this->statusChangedTo($model, ClinicalRecordStatus::Cancelled) => AuditEventCategory::AssessmentCancelled,
+                default => AuditEventCategory::AssessmentUpdated,
+            },
+            PatientEvolution::class => match (true) {
+                $this->statusChangedTo($model, ClinicalRecordStatus::Completed) => AuditEventCategory::EvolutionConfirmed,
+                $this->statusChangedTo($model, ClinicalRecordStatus::Cancelled) => AuditEventCategory::EvolutionCancelled,
+                default => AuditEventCategory::EvolutionUpdated,
+            },
             ClinicalRecord::class => AuditEventCategory::ClinicalRecordUpdated,
             default => null,
         };
@@ -61,9 +65,9 @@ class AuditEventResolver
         };
     }
 
-    private function wasConfirmed(Model $model): bool
+    private function statusChangedTo(Model $model, ClinicalRecordStatus $status): bool
     {
         return $model->wasChanged('status')
-            && $model->getAttribute('status') === ClinicalRecordStatus::Completed;
+            && $model->getAttribute('status') === $status;
     }
 }

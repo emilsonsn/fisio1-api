@@ -25,6 +25,7 @@ class PatientResource extends JsonResource
             'email' => $this->email,
             'notes' => $this->notes,
             'has_photo' => (bool) $this->photo_path,
+            'is_deleted' => $this->trashed(),
             'clinical_records_count' => (int) ($this->assessments_count ?? 0) + (int) ($this->evolutions_count ?? 0),
             'created_at' => $this->created_at?->toISOString(),
         ];

@@ -8,6 +8,8 @@ enum AuditEventCategory: string
     case LoginFailed = 'auth.login_failed';
     case Logout = 'auth.logout';
     case PasswordResetRequested = 'auth.password_reset_requested';
+    case PasswordResetCodeVerified = 'auth.password_reset_code_verified';
+    case PasswordResetVerificationFailed = 'auth.password_reset_verification_failed';
     case PasswordReset = 'auth.password_reset';
 
     case PatientCreated = 'patient.created';
@@ -28,11 +30,13 @@ enum AuditEventCategory: string
     case AssessmentCreated = 'assessment.created';
     case AssessmentUpdated = 'assessment.updated';
     case AssessmentConfirmed = 'assessment.confirmed';
+    case AssessmentCancelled = 'assessment.cancelled';
     case AssessmentDeleted = 'assessment.deleted';
 
     case EvolutionCreated = 'evolution.created';
     case EvolutionUpdated = 'evolution.updated';
     case EvolutionConfirmed = 'evolution.confirmed';
+    case EvolutionCancelled = 'evolution.cancelled';
     case EvolutionDeleted = 'evolution.deleted';
 
     case ClinicalRecordCreated = 'clinical_record.created';
@@ -55,6 +59,8 @@ enum AuditEventCategory: string
             self::LoginFailed => 'Tentativa de login sem sucesso',
             self::Logout => 'Logout realizado',
             self::PasswordResetRequested => 'Recuperação de senha solicitada',
+            self::PasswordResetCodeVerified => 'Código de recuperação validado',
+            self::PasswordResetVerificationFailed => 'Validação do código de recuperação falhou',
             self::PasswordReset => 'Senha redefinida',
             self::PatientCreated => 'Paciente cadastrado',
             self::PatientUpdated => 'Paciente editado',
@@ -71,10 +77,12 @@ enum AuditEventCategory: string
             self::AssessmentCreated => 'Avaliação cadastrada',
             self::AssessmentUpdated => 'Avaliação editada',
             self::AssessmentConfirmed => 'Avaliação concluída',
+            self::AssessmentCancelled => 'Avaliação cancelada',
             self::AssessmentDeleted => 'Avaliação excluída',
             self::EvolutionCreated => 'Evolução cadastrada',
             self::EvolutionUpdated => 'Evolução editada',
             self::EvolutionConfirmed => 'Evolução concluída',
+            self::EvolutionCancelled => 'Evolução cancelada',
             self::EvolutionDeleted => 'Evolução excluída',
             self::ClinicalRecordCreated => 'Registro clínico cadastrado',
             self::ClinicalRecordUpdated => 'Registro clínico editado',

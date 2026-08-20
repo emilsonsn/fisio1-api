@@ -5,17 +5,27 @@ namespace App\Http\Controllers\Api;
 use App\Enums\AuditEventCategory;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Http\Requests\Auth\RequestPasswordRecoveryCodeRequest;
+use App\Http\Requests\Auth\ResetPasswordRequest;
+use App\Http\Requests\Auth\VerifyPasswordRecoveryCodeRequest;
 use App\Http\Resources\UserResource;
+use App\Models\PasswordResetCode;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
+use App\Services\Auth\PasswordRecoveryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    public function __construct(private readonly AuditLogger $audit) {}
+    public function __construct(
+        private readonly AuditLogger $audit,
+        private readonly PasswordRecoveryService $passwordRecovery,
+    ) {}
 
     public function login(LoginRequest $request): JsonResponse
     {
@@ -50,27 +60,85 @@ class AuthController extends Controller
         return response()->json(status: 204);
     }
 
-    public function forgotPassword(Request $request): JsonResponse
+    public function forgotPassword(RequestPasswordRecoveryCodeRequest $request): JsonResponse
     {
-        $request->validate(['email' => ['required', 'email']]);
-        $user = User::query()->where('email', $request->string('email'))->first();
-        $this->audit->record(AuditEventCategory::PasswordResetRequested, $user, metadata: [
-            'attempted_email' => $request->string('email')->toString(),
-        ]);
-        Password::sendResetLink($request->only('email'));
+        $email = $request->string('email')->toString();
 
-        return response()->json(['message' => 'Se o e-mail existir, as instruções de recuperação foram enviadas.']);
+        if ($request->isHoneypotTriggered()) {
+            $this->audit->record(AuditEventCategory::PasswordResetRequested, metadata: [
+                'attempted_email' => $email,
+                'blocked_by_honeypot' => true,
+            ]);
+
+            return $this->recoveryCodeRequestedResponse();
+        }
+
+        $user = $this->passwordRecovery->sendCode($email);
+        $this->audit->record(AuditEventCategory::PasswordResetRequested, $user, metadata: [
+            'attempted_email' => $email,
+        ]);
+
+        return $this->recoveryCodeRequestedResponse();
     }
 
-    public function resetPassword(Request $request): JsonResponse
+    public function verifyPasswordRecoveryCode(VerifyPasswordRecoveryCodeRequest $request): JsonResponse
     {
-        $request->validate(['token' => ['required'], 'email' => ['required', 'email'], 'password' => ['required', 'confirmed', 'min:8']]);
-        $status = Password::reset($request->only('email', 'password', 'password_confirmation', 'token'), function (User $user, string $password): void {
-            $user->forceFill(['password' => $password])->save();
-            $this->audit->record(AuditEventCategory::PasswordReset, $user, newValues: ['password' => $password]);
-        });
-        abort_unless($status === Password::PASSWORD_RESET, 422, __($status));
+        $email = $request->string('email')->toString();
+
+        try {
+            $verified = $this->passwordRecovery->verifyCode(
+                $email,
+                $request->string('code')->toString(),
+            );
+        } catch (ValidationException $exception) {
+            $this->audit->record(AuditEventCategory::PasswordResetVerificationFailed, metadata: [
+                'attempted_email' => $email,
+            ]);
+
+            throw $exception;
+        }
+
+        $this->audit->record(AuditEventCategory::PasswordResetCodeVerified, $verified['user']);
+
+        return response()->json(['data' => [
+            'email' => $verified['user']->email,
+            'reset_token' => $verified['token'],
+            'expires_in' => $verified['expires_in'],
+        ]]);
+    }
+
+    public function resetPassword(ResetPasswordRequest $request): JsonResponse
+    {
+        $status = Password::reset(
+            $request->safe()->only(['email', 'password', 'password_confirmation', 'token']),
+            function (User $user, string $password): void {
+                $user->forceFill([
+                    'password' => $password,
+                    'remember_token' => Str::random(60),
+                ])->save();
+                $user->tokens()->delete();
+                PasswordResetCode::query()->where('email', $user->email)->delete();
+                $this->audit->record(
+                    AuditEventCategory::PasswordReset,
+                    $user,
+                    newValues: ['password' => '[updated]'],
+                );
+            },
+        );
+
+        if ($status !== Password::PASSWORD_RESET) {
+            throw ValidationException::withMessages([
+                'token' => 'Token de redefinição inválido ou expirado.',
+            ]);
+        }
 
         return response()->json(['message' => 'Senha redefinida com sucesso.']);
+    }
+
+    private function recoveryCodeRequestedResponse(): JsonResponse
+    {
+        return response()->json([
+            'message' => 'Se o e-mail estiver cadastrado, enviaremos um código de recuperação.',
+        ]);
     }
 }

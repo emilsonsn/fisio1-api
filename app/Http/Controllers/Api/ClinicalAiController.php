@@ -85,6 +85,7 @@ class ClinicalAiController extends Controller
     {
         $process->load(['processable', 'chunks']);
         abort_unless($process->processable && ($request->user()->hasPermission('clinical_records.manage_all') || $process->processable->professional_id === $request->user()->id), 403);
+        abort_if($process->processable->status === ClinicalRecordStatus::Cancelled, 422, 'Registros cancelados não podem ser reprocessados.');
         abort_unless($process->status === ClinicalAiProcessStatus::Failed, 422, 'Somente processamentos com falha podem ser retomados.');
 
         DB::transaction(function () use ($process): void {

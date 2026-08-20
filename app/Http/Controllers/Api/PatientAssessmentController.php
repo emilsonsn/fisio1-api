@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\ClinicalRecordStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ClinicalRecord\CancelClinicalRecordRequest;
 use App\Http\Requests\PatientAssessment\StorePatientAssessmentRequest;
 use App\Http\Requests\PatientAssessment\UpdatePatientAssessmentRequest;
 use App\Http\Resources\PatientAssessmentResource;
 use App\Models\Patient;
 use App\Models\PatientAssessment;
+use App\Services\ClinicalRecords\CancelClinicalRecord;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\Response;
@@ -46,8 +48,24 @@ class PatientAssessmentController extends Controller
     public function update(UpdatePatientAssessmentRequest $request, PatientAssessment $assessment): PatientAssessmentResource
     {
         $this->authorizeRecord($request, $assessment->professional_id);
+        abort_unless(
+            in_array($assessment->status, [ClinicalRecordStatus::InReview, ClinicalRecordStatus::Completed], true),
+            422,
+            'Somente avaliações em revisão ou concluídas podem ser editadas.',
+        );
         $assessment->update($request->safe()->except('attachments'));
         $this->storeAttachments($request, $assessment);
+
+        return new PatientAssessmentResource($assessment->load(['patient', 'professional', 'attachments', 'aiProcess']));
+    }
+
+    public function cancel(
+        CancelClinicalRecordRequest $request,
+        PatientAssessment $assessment,
+        CancelClinicalRecord $canceller,
+    ): PatientAssessmentResource {
+        $this->authorizeRecord($request, $assessment->professional_id);
+        $assessment = $canceller->handle($assessment, $request->user(), $request->validated('reason'));
 
         return new PatientAssessmentResource($assessment->load(['patient', 'professional', 'attachments', 'aiProcess']));
     }
