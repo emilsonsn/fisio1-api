@@ -44,6 +44,7 @@ class PatientController extends Controller
     {
         if ($patient->photo_path) {
             Storage::disk('local')->delete($patient->photo_path);
+            $patient->forceFill(['photo_path' => null])->saveQuietly();
         }
         $patient->delete();
 

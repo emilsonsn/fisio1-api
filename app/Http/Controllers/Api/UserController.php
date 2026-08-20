@@ -9,9 +9,12 @@ use App\Http\Requests\User\UpdateUserRequest;
 use App\Http\Resources\UserResource;
 use App\Models\AccessGroup;
 use App\Models\User;
+use App\Notifications\UserAccountCreatedNotification;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class UserController extends Controller
 {
@@ -24,12 +27,28 @@ class UserController extends Controller
 
     public function store(StoreUserRequest $request): UserResource
     {
-        $user = User::create($this->payloadWithPhoto($request));
-        $groupIds = $request->validated('access_group_ids');
-        $user->accessGroups()->sync($groupIds);
-        $this->audit->record(AuditEventCategory::UserGroupsUpdated, $user, newValues: [
-            'access_groups' => $this->groupSnapshots($groupIds),
-        ]);
+        $temporaryPassword = $request->validated('password') ?: Str::password(
+            length: 12,
+            symbols: false,
+        );
+
+        $user = DB::transaction(function () use ($request, $temporaryPassword): User {
+            $payload = $this->payloadWithPhoto($request);
+            $payload['password'] = $temporaryPassword;
+            $user = User::create($payload);
+            $groupIds = $request->validated('access_group_ids');
+            $user->accessGroups()->sync($groupIds);
+            $this->audit->record(AuditEventCategory::UserGroupsUpdated, $user, newValues: [
+                'access_groups' => $this->groupSnapshots($groupIds),
+            ]);
+
+            $user->notify(new UserAccountCreatedNotification(
+                temporaryPassword: $temporaryPassword,
+                applicationUrl: rtrim((string) config('app.frontend_url'), '/').'/login',
+            ));
+
+            return $user;
+        });
 
         return new UserResource($user->load('accessGroups.permissions'));
     }

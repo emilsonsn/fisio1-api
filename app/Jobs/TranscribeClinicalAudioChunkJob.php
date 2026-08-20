@@ -57,6 +57,9 @@ class TranscribeClinicalAudioChunkJob implements ShouldQueue
     public function failed(?Throwable $exception): void
     {
         $chunk = ClinicalAiChunk::query()->with('process.processable')->find($this->chunkId);
+        if ($chunk?->process?->status === ClinicalAiProcessStatus::Cancelled || $chunk?->process?->processable?->status === ClinicalRecordStatus::Cancelled) {
+            return;
+        }
         $message = str($exception?->getMessage())->limit(1000)->toString();
         $chunk?->update(['status' => ClinicalAiChunkStatus::Failed, 'error_message' => $message]);
         $chunk?->process?->update(['status' => ClinicalAiProcessStatus::Failed, 'error_message' => $message, 'failed_at' => now()]);

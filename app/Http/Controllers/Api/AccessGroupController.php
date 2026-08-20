@@ -46,6 +46,8 @@ class AccessGroupController extends Controller
 
     public function update(UpdateAccessGroupRequest $request, AccessGroup $accessGroup): AccessGroupResource
     {
+        abort_if($accessGroup->is_system, 422, 'Grupos de sistema não podem ser alterados.');
+
         DB::transaction(function () use ($request, $accessGroup): void {
             $accessGroup->update($request->safe()->except('permission_ids'));
             if ($request->has('permission_ids')) {
@@ -71,6 +73,7 @@ class AccessGroupController extends Controller
     public function destroy(AccessGroup $accessGroup): Response
     {
         abort_if($accessGroup->is_system, 422, 'Grupos de sistema não podem ser removidos.');
+        abort_if($accessGroup->users()->exists(), 422, 'Remova os usuários vinculados antes de excluir o grupo.');
         $accessGroup->delete();
 
         return response()->noContent();

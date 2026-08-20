@@ -14,6 +14,8 @@ class GeminiClinicalInteractionService
 
     private const TRANSIENT_STATUSES = [429, 500, 502, 503, 504];
 
+    public function __construct(private readonly ClinicalExtractionProtocol $protocol) {}
+
     public function generateFromTranscript(string $transcript, string $type): array
     {
         if (trim($transcript) === '') {
@@ -26,13 +28,19 @@ class GeminiClinicalInteractionService
                     'model' => $model,
                     'input' => [[
                         'type' => 'text',
-                        'text' => $this->prompt()."\n\nTranscrição integral do atendimento:\n".$transcript,
+                        'text' => $this->protocol->prompt($type)."\n\nTRANSCRIÇÃO INTEGRAL DO ATENDIMENTO\n".$transcript,
                     ]],
                     'response_format' => $this->responseFormat($type),
+                    'generation_config' => [
+                        'max_output_tokens' => (int) config('services.gemini.extraction_max_output_tokens', 8192),
+                        'temperature' => (float) config('services.gemini.extraction_temperature', 0.2),
+                        'thinking_level' => 'low',
+                    ],
+                    'store' => false,
                 ], $model);
 
                 if ($response->successful()) {
-                    return $this->parse($response, $model);
+                    return $this->parse($response, $model, $type);
                 }
 
                 if ($index === 0 && $this->isTransient($response)) {
@@ -78,7 +86,7 @@ class GeminiClinicalInteractionService
         return $response;
     }
 
-    private function parse(Response $response, string $model): array
+    private function parse(Response $response, string $model, string $type): array
     {
         $result = json_decode($this->outputText($response), true);
 
@@ -91,10 +99,7 @@ class GeminiClinicalInteractionService
             throw new RuntimeException('O Gemini retornou uma resposta inválida para o prontuário.');
         }
 
-        return [
-            'transcript' => (string) ($result['transcript'] ?? ''),
-            'fields' => $result['fields'],
-        ];
+        return ['fields' => $this->normalizeFields($result['fields'], $type)];
     }
 
     private function outputText(Response $response): string
@@ -154,40 +159,56 @@ class GeminiClinicalInteractionService
         return $key;
     }
 
-    private function prompt(): string
-    {
-        return 'Extraia exclusivamente os dados clínicos explicitamente informados na transcrição. Não invente informações. Para campos não citados, use string vazia; para campos numéricos ausentes, use null.';
-    }
-
     private function responseFormat(string $type): array
     {
+        $fieldSchema = $this->fieldSchema($type);
+
         return [
             'type' => 'object',
             'properties' => [
-                'transcript' => ['type' => 'string'],
-                'fields' => ['type' => 'object', 'properties' => $this->fieldSchema($type)],
+                'fields' => [
+                    'type' => 'object',
+                    'properties' => $fieldSchema,
+                    'required' => array_keys($fieldSchema),
+                    'additionalProperties' => false,
+                ],
             ],
-            'required' => ['transcript', 'fields'],
+            'required' => ['fields'],
+            'additionalProperties' => false,
         ];
     }
 
     private function fieldSchema(string $type): array
     {
-        $stringFields = $type === 'evolution'
-            ? ['daily_complaint', 'home_guidance_adherence', 'therapeutic_conduct', 'session_final_impression', 'observations']
-            : ['indication', 'birthplace', 'marital_status', 'gender', 'profession', 'address', 'chief_complaint', 'condition_history', 'life_habits', 'personal_family_history', 'previous_treatments', 'physical_examination', 'complementary_exams', 'physical_therapy_diagnosis', 'cbdf', 'resources_methods_techniques', 'therapeutic_objectives', 'physical_therapy_prognosis'];
+        return collect($this->protocol->fieldDefinitions($type))
+            ->mapWithKeys(function (string $description, string $field): array {
+                if ($field === 'pain_level') {
+                    return [$field => ['type' => 'integer', 'nullable' => true, 'minimum' => 0, 'maximum' => 10, 'description' => $description]];
+                }
 
-        $schema = array_fill_keys($stringFields, ['type' => 'string']);
-        $schema[$type === 'evolution' ? 'pain_level' : 'planned_sessions'] = [
-            'type' => 'integer',
-            'nullable' => true,
-            'minimum' => 0,
-        ];
+                if ($field === 'planned_sessions') {
+                    return [$field => ['type' => 'integer', 'nullable' => true, 'minimum' => 1, 'description' => $description]];
+                }
 
-        if ($type === 'evolution') {
-            $schema['pain_level']['maximum'] = 10;
-        }
+                return [$field => ['type' => 'string', 'description' => $description]];
+            })
+            ->all();
+    }
 
-        return $schema;
+    private function normalizeFields(array $fields, string $type): array
+    {
+        return collect(array_keys($this->protocol->fieldDefinitions($type)))
+            ->mapWithKeys(function (string $field) use ($fields, $type): array {
+                $value = $fields[$field] ?? null;
+
+                if (in_array($field, ['pain_level', 'planned_sessions'], true)) {
+                    return [$field => is_numeric($value) ? (int) $value : null];
+                }
+
+                $value = is_string($value) ? trim($value) : '';
+
+                return [$field => $value !== '' ? $value : $this->protocol->missingValue($type, $field)];
+            })
+            ->all();
     }
 }

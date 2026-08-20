@@ -2,6 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\AccessGroup;
+use App\Models\Patient;
+use App\Models\PatientAssessment;
+use App\Models\PatientEvolution;
 use App\Models\Permission;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -69,6 +73,159 @@ class ClinicalApiTest extends TestCase
 
         $groupId = $this->postJson('/api/v1/groups', ['name' => 'Consulta', 'permission_ids' => $permissionIds], $headers)->assertCreated()->assertJsonCount(2, 'data.permissions')->json('data.id');
         $this->postJson('/api/v1/users', ['name' => 'Profissional de teste', 'email' => 'profissional@example.com', 'password' => 'secret123', 'access_group_ids' => [$groupId]], $headers)->assertCreated()->assertJsonPath('data.access_groups.0.name', 'Consulta');
+    }
+
+    public function test_only_an_administrator_is_seeded_with_permission_to_delete_patients(): void
+    {
+        $this->seed();
+        $administrator = User::where('email', 'andre@fisio1.com.br')->firstOrFail();
+        $this->assertTrue($administrator->hasPermission('patients.delete'));
+
+        $professional = User::factory()->create();
+        $viewGroup = AccessGroup::create(['name' => 'Consulta de pacientes']);
+        $viewGroup->permissions()->attach(Permission::where('key', 'patients.view')->firstOrFail());
+        $professional->accessGroups()->attach($viewGroup);
+        $this->assertFalse($professional->hasPermission('patients.delete'));
+
+        $patient = Patient::create([
+            'name' => 'Paciente removível',
+            'document' => '45678912300',
+            'birth_date' => '1991-02-03',
+            'phone' => '85977778888',
+        ]);
+        $assessment = PatientAssessment::create([
+            'patient_id' => $patient->id,
+            'professional_id' => $administrator->id,
+            'assessed_at' => now()->toDateString(),
+        ]);
+
+        $this->actingAs($professional, 'sanctum')
+            ->deleteJson('/api/v1/patients/'.$patient->id)
+            ->assertForbidden();
+
+        $this->actingAs($administrator, 'sanctum')
+            ->deleteJson('/api/v1/patients/'.$patient->id)
+            ->assertNoContent();
+
+        $this->assertSoftDeleted('patients', ['id' => $patient->id]);
+        $this->actingAs($administrator, 'sanctum')
+            ->getJson('/api/v1/assessments')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $assessment->id)
+            ->assertJsonPath('data.0.patient.name', 'Paciente removível')
+            ->assertJsonPath('data.0.patient.is_deleted', true);
+    }
+
+    public function test_patient_history_is_returned_from_oldest_to_newest_with_progress_summary(): void
+    {
+        $this->seed();
+        $administrator = User::where('email', 'andre@fisio1.com.br')->firstOrFail();
+        $patient = Patient::create([
+            'name' => 'Paciente em acompanhamento',
+            'document' => '65432198700',
+            'birth_date' => '1988-06-15',
+            'phone' => '85966667777',
+        ]);
+        PatientAssessment::create([
+            'patient_id' => $patient->id,
+            'professional_id' => $administrator->id,
+            'assessed_at' => '2026-06-01',
+            'chief_complaint' => 'Dor lombar ao caminhar',
+            'physical_therapy_diagnosis' => 'Limitação funcional lombar',
+        ]);
+        PatientEvolution::create([
+            'patient_id' => $patient->id,
+            'professional_id' => $administrator->id,
+            'evolved_at' => '2026-06-20',
+            'daily_complaint' => 'Dor leve após esforço',
+            'pain_level' => 3,
+        ]);
+        PatientEvolution::create([
+            'patient_id' => $patient->id,
+            'professional_id' => $administrator->id,
+            'evolved_at' => '2026-06-08',
+            'daily_complaint' => 'Dor persistente',
+            'pain_level' => 8,
+        ]);
+
+        $this->actingAs($administrator, 'sanctum')
+            ->getJson('/api/v1/patients/'.$patient->id.'/history')
+            ->assertOk()
+            ->assertJsonPath('data.patient.id', $patient->id)
+            ->assertJsonPath('data.summary.total_records', 3)
+            ->assertJsonPath('data.summary.total_assessments', 1)
+            ->assertJsonPath('data.summary.total_evolutions', 2)
+            ->assertJsonPath('data.summary.initial_pain_level', 8)
+            ->assertJsonPath('data.summary.current_pain_level', 3)
+            ->assertJsonPath('data.summary.pain_change', 5)
+            ->assertJsonPath('data.timeline.0.type', 'initial_assessment')
+            ->assertJsonPath('data.timeline.0.recorded_at', '2026-06-01')
+            ->assertJsonPath('data.timeline.1.recorded_at', '2026-06-08')
+            ->assertJsonPath('data.timeline.2.recorded_at', '2026-06-20');
+    }
+
+    public function test_administrator_can_export_the_current_patient_history_as_pdf(): void
+    {
+        $this->seed();
+        $administrator = User::where('email', 'andre@fisio1.com.br')->firstOrFail();
+        $patient = Patient::create([
+            'name' => 'Helena de Sousa',
+            'document' => '74185296300',
+            'birth_date' => '1985-04-12',
+            'phone' => '85955554444',
+        ]);
+        PatientAssessment::create([
+            'patient_id' => $patient->id,
+            'professional_id' => $administrator->id,
+            'assessed_at' => '2026-07-01',
+            'chief_complaint' => 'Dor cervical e limitação para rotação.',
+        ]);
+        PatientEvolution::create([
+            'patient_id' => $patient->id,
+            'professional_id' => $administrator->id,
+            'evolved_at' => '2026-07-08',
+            'daily_complaint' => 'Menor desconforto ao trabalhar.',
+            'pain_level' => 4,
+        ]);
+
+        $response = $this->actingAs($administrator, 'sanctum')
+            ->get('/api/v1/patients/'.$patient->id.'/history.pdf');
+
+        $response
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf')
+            ->assertHeader('content-disposition', 'attachment; filename=relatorio-clinico-helena-de-sousa.pdf');
+        $this->assertStringStartsWith('%PDF-', $response->getContent());
+        $this->assertDatabaseHas('audit_logs', [
+            'event' => 'patient.history_exported',
+            'auditable_id' => $patient->id,
+            'user_id' => $administrator->id,
+        ]);
+    }
+
+    public function test_administrator_can_delete_only_custom_groups_without_users(): void
+    {
+        $this->seed();
+        $administrator = User::where('email', 'andre@fisio1.com.br')->firstOrFail();
+        $headers = ['Authorization' => 'Bearer '.$administrator->createToken('test')->plainTextToken];
+
+        $emptyGroup = AccessGroup::create(['name' => 'Grupo temporário']);
+        $this->deleteJson('/api/v1/groups/'.$emptyGroup->id, [], $headers)->assertNoContent();
+        $this->assertDatabaseMissing('access_groups', ['id' => $emptyGroup->id]);
+
+        $usedGroup = AccessGroup::create(['name' => 'Grupo em uso']);
+        $administrator->accessGroups()->attach($usedGroup);
+        $this->deleteJson('/api/v1/groups/'.$usedGroup->id, [], $headers)
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Remova os usuários vinculados antes de excluir o grupo.');
+
+        $systemGroup = AccessGroup::where('is_system', true)->firstOrFail();
+        $this->patchJson('/api/v1/groups/'.$systemGroup->id, ['name' => 'Administrador alterado'], $headers)
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Grupos de sistema não podem ser alterados.');
+        $this->deleteJson('/api/v1/groups/'.$systemGroup->id, [], $headers)
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Grupos de sistema não podem ser removidos.');
     }
 
     public function test_inactive_user_cannot_authenticate_and_physiotherapist_cannot_manage_users(): void

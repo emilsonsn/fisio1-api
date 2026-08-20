@@ -9,9 +9,7 @@ use App\Http\Requests\ClinicalRecord\UpdateClinicalRecordRequest;
 use App\Http\Resources\ClinicalRecordResource;
 use App\Models\ClinicalAttachment;
 use App\Models\ClinicalRecord;
-use App\Models\Patient;
 use App\Services\Audit\AuditLogger;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\Response;
@@ -69,14 +67,6 @@ class ClinicalRecordController extends Controller
         $this->audit->record(AuditEventCategory::AttachmentDownloaded, $attachment);
 
         return Storage::disk($attachment->disk)->download($attachment->path, $attachment->original_name);
-    }
-
-    public function exportPatientHistory(Patient $patient)
-    {
-        $patient->load(['clinicalRecords' => fn ($query) => $query->with('professional')->orderBy('performed_at')]);
-        $this->audit->record(AuditEventCategory::PatientHistoryExported, $patient);
-
-        return Pdf::loadView('pdf.patient-history', compact('patient'))->download('historico-'.$patient->id.'.pdf');
     }
 
     private function storeAttachments(Request $request, ClinicalRecord $record): void

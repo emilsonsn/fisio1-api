@@ -9,6 +9,8 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\PatientAssessmentController;
 use App\Http\Controllers\Api\PatientController;
 use App\Http\Controllers\Api\PatientEvolutionController;
+use App\Http\Controllers\Api\PatientHistoryController;
+use App\Http\Controllers\Api\PatientReportController;
 use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\Api\RecordAttachmentController;
 use App\Http\Controllers\Api\UserController;
@@ -17,6 +19,7 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function (): void {
     Route::post('auth/login', [AuthController::class, 'login'])->middleware('throttle:6,1');
     Route::post('auth/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:6,1');
+    Route::post('auth/forgot-password/verify', [AuthController::class, 'verifyPasswordRecoveryCode'])->middleware('throttle:10,1');
     Route::post('auth/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:6,1');
 
     Route::middleware(['auth:sanctum', 'active'])->group(function (): void {
@@ -25,11 +28,12 @@ Route::prefix('v1')->group(function (): void {
         Route::get('dashboard', DashboardController::class)->middleware('permission:dashboard.view');
         Route::get('patients', [PatientController::class, 'index'])->middleware('permission:patients.view');
         Route::post('patients', [PatientController::class, 'store'])->middleware('permission:patients.create');
+        Route::get('patients/{patient}/history', PatientHistoryController::class)->middleware('permission:patients.view');
         Route::get('patients/{patient}', [PatientController::class, 'show'])->middleware('permission:patients.view');
         Route::get('patients/{patient}/photo', [PatientController::class, 'photo'])->middleware('permission:patients.view')->name('patients.photo');
         Route::match(['put', 'patch'], 'patients/{patient}', [PatientController::class, 'update'])->middleware('permission:patients.update');
         Route::delete('patients/{patient}', [PatientController::class, 'destroy'])->middleware('permission:patients.delete');
-        Route::get('patients/{patient}/history.pdf', [ClinicalRecordController::class, 'exportPatientHistory'])->middleware('permission:patients.export')->name('patients.history.pdf');
+        Route::get('patients/{patient}/history.pdf', PatientReportController::class)->middleware('permission:patients.export')->name('patients.history.pdf');
         Route::get('clinical-records', [ClinicalRecordController::class, 'index'])->middleware('permission:clinical_records.view');
         Route::post('clinical-ai/process-audio', [ClinicalAiController::class, 'processAudio'])->middleware('permission:clinical_records.create');
         Route::post('clinical-ai/processes/{process}/retry', [ClinicalAiController::class, 'retry'])->middleware('permission:clinical_records.update');
@@ -39,12 +43,14 @@ Route::prefix('v1')->group(function (): void {
         Route::get('assessments/{assessment}', [PatientAssessmentController::class, 'show'])->middleware('permission:clinical_records.view');
         Route::match(['put', 'patch'], 'assessments/{assessment}', [PatientAssessmentController::class, 'update'])->middleware('permission:clinical_records.update');
         Route::post('assessments/{assessment}/confirm', [PatientAssessmentController::class, 'confirm'])->middleware('permission:clinical_records.update');
+        Route::post('assessments/{assessment}/cancel', [PatientAssessmentController::class, 'cancel'])->middleware('permission:clinical_records.cancel');
         Route::delete('assessments/{assessment}', [PatientAssessmentController::class, 'destroy'])->middleware('permission:clinical_records.delete');
         Route::get('evolutions', [PatientEvolutionController::class, 'index'])->middleware('permission:clinical_records.view');
         Route::post('evolutions', [PatientEvolutionController::class, 'store'])->middleware('permission:clinical_records.create');
         Route::get('evolutions/{evolution}', [PatientEvolutionController::class, 'show'])->middleware('permission:clinical_records.view');
         Route::match(['put', 'patch'], 'evolutions/{evolution}', [PatientEvolutionController::class, 'update'])->middleware('permission:clinical_records.update');
         Route::post('evolutions/{evolution}/confirm', [PatientEvolutionController::class, 'confirm'])->middleware('permission:clinical_records.update');
+        Route::post('evolutions/{evolution}/cancel', [PatientEvolutionController::class, 'cancel'])->middleware('permission:clinical_records.cancel');
         Route::delete('evolutions/{evolution}', [PatientEvolutionController::class, 'destroy'])->middleware('permission:clinical_records.delete');
         Route::get('record-attachments/{recordAttachment}/download', [RecordAttachmentController::class, 'download'])->middleware('permission:attachments.download')->name('record-attachments.download');
         Route::delete('record-attachments/{recordAttachment}', [RecordAttachmentController::class, 'destroy'])->middleware('permission:clinical_records.update');

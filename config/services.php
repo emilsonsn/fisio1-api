@@ -42,6 +42,8 @@ return [
         'extraction_fallback_model' => env('GEMINI_EXTRACTION_FALLBACK_MODEL', env('GEMINI_FALLBACK_MODEL', 'gemini-3.6-flash')),
         'request_timeout' => (int) env('GEMINI_REQUEST_TIMEOUT', 60),
         'transcription_max_output_tokens' => (int) env('GEMINI_TRANSCRIPTION_MAX_OUTPUT_TOKENS', 4096),
+        'extraction_max_output_tokens' => (int) env('GEMINI_EXTRACTION_MAX_OUTPUT_TOKENS', 8192),
+        'extraction_temperature' => (float) env('GEMINI_EXTRACTION_TEMPERATURE', 0.2),
         'inline_max_bytes' => (int) env('GEMINI_INLINE_MAX_BYTES', 14680064),
         'project' => env('GOOGLE_CLOUD_PROJECT'),
         'project_number' => env('GOOGLE_CLOUD_PROJECT_NUMBER'),

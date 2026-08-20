@@ -14,6 +14,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class SplitClinicalAudioJob implements ShouldQueue
@@ -42,7 +43,12 @@ class SplitClinicalAudioJob implements ShouldQueue
         $process->update(['status' => ClinicalAiProcessStatus::Splitting, 'started_at' => $process->started_at ?? now(), 'error_message' => null, 'failed_at' => null]);
         $files = $splitter->split($process);
 
-        DB::transaction(function () use ($process, $files): void {
+        $shouldDispatch = DB::transaction(function () use ($process, $files): bool {
+            $process = ClinicalAiProcess::query()->lockForUpdate()->findOrFail($process->id);
+            if ($process->status !== ClinicalAiProcessStatus::Splitting) {
+                return false;
+            }
+
             $process->chunks()->delete();
 
             foreach ($files as $sequence => $path) {
@@ -56,14 +62,25 @@ class SplitClinicalAudioJob implements ShouldQueue
             }
 
             $process->update(['status' => ClinicalAiProcessStatus::Transcribing, 'chunks_count' => count($files), 'processed_chunks' => 0]);
+
+            return true;
         });
 
-        $process->chunks()->each(fn ($chunk) => TranscribeClinicalAudioChunkJob::dispatch($chunk->id)->onQueue('clinical-ai'));
+        if (! $shouldDispatch) {
+            collect($files)->each(fn (string $path) => Storage::disk($process->audio_disk)->delete($path));
+
+            return;
+        }
+
+        $process->refresh()->chunks()->each(fn ($chunk) => TranscribeClinicalAudioChunkJob::dispatch($chunk->id)->onQueue('clinical-ai'));
     }
 
     public function failed(?Throwable $exception): void
     {
-        $process = ClinicalAiProcess::query()->find($this->processId);
+        $process = ClinicalAiProcess::query()->with('processable')->find($this->processId);
+        if ($process?->status === ClinicalAiProcessStatus::Cancelled || $process?->processable?->status === ClinicalRecordStatus::Cancelled) {
+            return;
+        }
         $process?->update(['status' => ClinicalAiProcessStatus::Failed, 'error_message' => str($exception?->getMessage())->limit(1000), 'failed_at' => now()]);
         $process?->processable?->update(['status' => ClinicalRecordStatus::Failed]);
 
