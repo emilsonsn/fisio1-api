@@ -14,6 +14,28 @@ class UpdateAccessGroupRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['name' => ['sometimes', 'required', 'string', 'max:100', Rule::unique('access_groups', 'name')->ignore($this->route('access_group'))], 'description' => ['nullable', 'string', 'max:1000'], 'permission_ids' => ['sometimes', 'array'], 'permission_ids.*' => ['integer', 'distinct', 'exists:permissions,id']];
+        return [
+            'name' => [
+                'sometimes',
+                'required',
+                'string',
+                'max:100',
+                Rule::unique('access_groups', 'name')->ignore($this->route('accessGroup'))
+            ],
+            'description' => [
+                'nullable',
+                'string', 
+                'max:1000'
+            ],
+            'permission_ids' => [
+                'sometimes',
+                'array'
+            ],
+            'permission_ids.*' => [
+                'integer',
+                'distinct',
+                'exists:permissions,id'
+            ]
+        ];
     }
 }
