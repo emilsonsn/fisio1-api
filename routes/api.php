@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\PatientEvolutionController;
 use App\Http\Controllers\Api\PatientHistoryController;
 use App\Http\Controllers\Api\PatientReportController;
 use App\Http\Controllers\Api\PermissionController;
+use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\RecordAttachmentController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
@@ -25,6 +26,9 @@ Route::prefix('v1')->group(function (): void {
     Route::middleware(['auth:sanctum', 'active'])->group(function (): void {
         Route::get('auth/me', [AuthController::class, 'me']);
         Route::post('auth/logout', [AuthController::class, 'logout']);
+        Route::match(['put', 'patch'], 'profile', [ProfileController::class, 'update']);
+        Route::put('profile/password', [ProfileController::class, 'updatePassword']);
+        Route::get('profile/photo', [ProfileController::class, 'photo'])->name('profile.photo');
         Route::get('dashboard', DashboardController::class)->middleware('permission:dashboard.view');
         Route::get('patients', [PatientController::class, 'index'])->middleware('permission:patients.view');
         Route::post('patients', [PatientController::class, 'store'])->middleware('permission:patients.create');

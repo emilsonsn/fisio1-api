@@ -21,6 +21,8 @@ enum AuditEventCategory: string
     case UserUpdated = 'user.updated';
     case UserDeleted = 'user.deleted';
     case UserGroupsUpdated = 'user.groups_updated';
+    case ProfileUpdated = 'user.profile_updated';
+    case ProfilePasswordChanged = 'user.password_changed';
 
     case AccessGroupCreated = 'access_group.created';
     case AccessGroupUpdated = 'access_group.updated';
@@ -70,6 +72,8 @@ enum AuditEventCategory: string
             self::UserUpdated => 'Usuário editado',
             self::UserDeleted => 'Usuário excluído',
             self::UserGroupsUpdated => 'Grupos do usuário alterados',
+            self::ProfileUpdated => 'Perfil atualizado',
+            self::ProfilePasswordChanged => 'Senha alterada pelo próprio usuário',
             self::AccessGroupCreated => 'Grupo cadastrado',
             self::AccessGroupUpdated => 'Grupo editado',
             self::AccessGroupDeleted => 'Grupo excluído',
