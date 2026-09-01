@@ -2,7 +2,6 @@
 
 namespace App\Http\Resources;
 
-use App\Enums\ClinicalRecordStatus;
 use App\Models\PatientAssessment;
 use App\Models\PatientEvolution;
 use Illuminate\Http\Request;
@@ -15,7 +14,6 @@ class PatientHistoryResource extends JsonResource
     {
         $timeline = $this->timeline();
         $painLevels = $this->evolutions
-            ->where('status', '!=', ClinicalRecordStatus::Cancelled)
             ->whereNotNull('pain_level')
             ->sortBy([['evolved_at', 'asc'], ['id', 'asc']])
             ->pluck('pain_level')

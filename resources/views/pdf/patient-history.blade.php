@@ -10,16 +10,16 @@
         .document-header { position: fixed; z-index: 900; top: -76px; right: 0; left: 0; height: 57px; border-radius: 10px; background: #074673; }
         .logo { position: fixed; z-index: 1000; top: -66px; left: 16px; width: 108px; height: auto; }
         .clinic-name { color: #ffffff; font-size: 15px; font-weight: 700; letter-spacing: .2px; }
-        .clinic-subtitle { color: #9fd9fa; font-size: 7px; letter-spacing: 1px; text-transform: uppercase; }
+        .clinic-subtitle { color: #9fd9fa; font-size: 8px; letter-spacing: 1px; text-transform: uppercase; }
         .header-title { position: fixed; z-index: 1000; top: -66px; right: 16px; color: #ffffff; font-size: 10px; font-weight: 700; text-align: right; }
         .header-date { position: fixed; z-index: 1000; top: -50px; right: 16px; color: #ffffff; font-size: 8px; text-align: right; }
-        .document-footer { position: fixed; right: 0; bottom: -37px; left: 0; padding-top: 8px; border-top: 1px solid #dbe7f0; color: #6c7d93; font-size: 7px; }
+        .document-footer { position: fixed; right: 0; bottom: -37px; left: 0; padding-top: 8px; border-top: 1px solid #dbe7f0; color: #6c7d93; font-size: 8px; }
         .document-footer table { width: 100%; border-collapse: collapse; }
         .document-footer td { padding: 0; }
         .page-number { text-align: right; }
         .page-number:after { content: counter(page); }
         .hero { padding: 20px 22px; border-radius: 13px; background: #eef7fc; }
-        .eyebrow { color: #0798d4; font-size: 7px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; }
+        .eyebrow { color: #0798d4; font-size: 8px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; }
         h1 { margin: 5px 0 3px; color: #0e1c31; font-size: 23px; line-height: 1.15; }
         .hero-copy { margin: 0; color: #63758d; font-size: 9px; }
         .hero-id { margin-top: 12px; padding-top: 10px; border-top: 1px solid #d7e8f2; color: #52667f; }
@@ -27,18 +27,18 @@
         .section { margin-top: 18px; }
         .section-heading { margin-bottom: 8px; }
         .section-heading h2 { margin: 2px 0 0; color: #10243e; font-size: 14px; }
-        .section-heading p { margin: 2px 0 0; color: #72839a; font-size: 8px; }
+        .section-heading p { margin: 2px 0 0; color: #72839a; font-size: 9px; }
         .patient-table, .stats-table { width: 100%; border-collapse: separate; border-spacing: 6px; margin: -6px; }
         .patient-table td { width: 33.333%; padding: 10px; border: 1px solid #e0e9f0; border-radius: 8px; background: #ffffff; vertical-align: top; }
-        .field-label { display: block; margin-bottom: 3px; color: #698097; font-size: 6.5px; font-weight: 700; letter-spacing: .45px; text-transform: uppercase; }
-        .field-value { color: #182a42; font-size: 9px; font-weight: 700; }
+        .field-label { display: block; margin-bottom: 3px; color: #698097; font-size: 8px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; }
+        .field-value { color: #182a42; font-size: 10px; font-weight: 700; }
         .stats-table td { width: 25%; padding: 11px; border-radius: 9px; background: #074673; color: #ffffff; vertical-align: top; }
         .stats-table td:nth-child(2) { background: #086fa7; }
         .stats-table td:nth-child(3) { background: #098fc2; }
         .stats-table td:nth-child(4) { background: #167c68; }
-        .stat-label { display: block; color: #ccecfb; font-size: 6.5px; text-transform: uppercase; }
+        .stat-label { display: block; color: #ccecfb; font-size: 8px; text-transform: uppercase; }
         .stat-value { display: block; margin: 4px 0 2px; font-size: 17px; font-weight: 700; line-height: 1; }
-        .stat-detail { color: #e8f7fd; font-size: 7px; }
+        .stat-detail { color: #e8f7fd; font-size: 8px; }
         .journey-intro { margin: 20px 0 10px; padding: 11px 14px; border-left: 4px solid #0aa9df; background: #f2f8fc; }
         .journey-intro strong { display: block; color: #0f2d4a; font-size: 11px; }
         .journey-intro span { color: #677b91; }
@@ -49,9 +49,9 @@
         .record-number { display: inline-block; min-width: 24px; margin-right: 7px; padding: 5px 7px; border-radius: 6px; color: #056895; background: #e7f5fc; font-size: 8px; font-weight: 700; text-align: center; }
         .evolution .record-number { color: #865a08; background: #fff4d9; }
         .record-title { color: #10243e; font-size: 12px; font-weight: 700; }
-        .record-meta { margin-top: 2px; color: #6c7e93; font-size: 7.5px; }
+        .record-meta { margin-top: 2px; color: #6c7e93; font-size: 8.5px; }
         .record-status { text-align: right; }
-        .status { display: inline-block; padding: 4px 7px; border-radius: 20px; color: #247a58; background: #e8f6ef; font-size: 6.5px; font-weight: 700; }
+        .status { display: inline-block; padding: 4px 7px; border-radius: 20px; color: #247a58; background: #e8f6ef; font-size: 8px; font-weight: 700; }
         .status.in_review { color: #8c620f; background: #fff3d8; }
         .status.pending { color: #176da0; background: #e5f4fc; }
         .status.failed { color: #a33a46; background: #fcebed; }
@@ -59,16 +59,16 @@
         .pain-box { margin-bottom: 9px; padding: 8px 10px; border-radius: 7px; background: #f4f8fa; }
         .pain-table { width: 100%; border-collapse: collapse; }
         .pain-table td { padding: 0; vertical-align: middle; }
-        .pain-label { width: 112px; color: #64798f; font-size: 7px; }
+        .pain-label { width: 112px; color: #64798f; font-size: 8px; }
         .pain-track { width: 100%; height: 6px; border-radius: 6px; background: #dfe8ec; }
         .pain-fill { height: 6px; border-radius: 6px; background: #da9d2f; }
         .pain-value { width: 46px; color: #162b44; font-size: 10px; font-weight: 700; text-align: right; }
         .clinical-field { margin-top: 8px; padding-top: 8px; border-top: 1px solid #edf2f5; page-break-inside: avoid; }
         .clinical-field:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
-        .clinical-field h3 { margin: 0 0 3px; color: #087aaf; font-size: 8px; }
+        .clinical-field h3 { margin: 0 0 3px; color: #087aaf; font-size: 9px; }
         .evolution .clinical-field h3 { color: #97680e; }
         .clinical-field p { margin: 0; color: #2c4058; white-space: pre-line; }
-        .attachments { margin-top: 9px; padding: 7px 9px; border-radius: 6px; color: #5d7086; background: #f4f7f9; font-size: 7px; }
+        .attachments { margin-top: 9px; padding: 7px 9px; border-radius: 6px; color: #5d7086; background: #f4f7f9; font-size: 8px; }
         .attachments strong { color: #243b54; }
         .patient-notes { margin-top: 8px; padding: 10px 12px; border: 1px solid #e2eaf0; border-radius: 8px; background: #fbfcfd; }
         .empty { padding: 24px; border: 1px dashed #ccdbe5; border-radius: 10px; color: #6d8197; background: #f8fbfd; text-align: center; }

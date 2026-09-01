@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\ClinicalRecordStatus;
 use App\Models\AccessGroup;
 use App\Models\Patient;
 use App\Models\PatientAssessment;
@@ -147,6 +148,21 @@ class ClinicalApiTest extends TestCase
             'daily_complaint' => 'Dor persistente',
             'pain_level' => 8,
         ]);
+        PatientAssessment::create([
+            'patient_id' => $patient->id,
+            'professional_id' => $administrator->id,
+            'assessed_at' => '2026-05-20',
+            'status' => ClinicalRecordStatus::InReview,
+            'chief_complaint' => 'Conteúdo ainda em revisão',
+        ]);
+        PatientEvolution::create([
+            'patient_id' => $patient->id,
+            'professional_id' => $administrator->id,
+            'evolved_at' => '2026-06-25',
+            'status' => ClinicalRecordStatus::Cancelled,
+            'daily_complaint' => 'Registro cancelado',
+            'pain_level' => 10,
+        ]);
 
         $this->actingAs($administrator, 'sanctum')
             ->getJson('/api/v1/patients/'.$patient->id.'/history')
@@ -161,7 +177,9 @@ class ClinicalApiTest extends TestCase
             ->assertJsonPath('data.timeline.0.type', 'initial_assessment')
             ->assertJsonPath('data.timeline.0.recorded_at', '2026-06-01')
             ->assertJsonPath('data.timeline.1.recorded_at', '2026-06-08')
-            ->assertJsonPath('data.timeline.2.recorded_at', '2026-06-20');
+            ->assertJsonPath('data.timeline.2.recorded_at', '2026-06-20')
+            ->assertJsonMissing(['chief_complaint' => 'Conteúdo ainda em revisão'])
+            ->assertJsonMissing(['daily_complaint' => 'Registro cancelado']);
     }
 
     public function test_administrator_can_export_the_current_patient_history_as_pdf(): void
@@ -186,6 +204,14 @@ class ClinicalApiTest extends TestCase
             'evolved_at' => '2026-07-08',
             'daily_complaint' => 'Menor desconforto ao trabalhar.',
             'pain_level' => 4,
+        ]);
+        PatientEvolution::create([
+            'patient_id' => $patient->id,
+            'professional_id' => $administrator->id,
+            'evolved_at' => '2026-07-09',
+            'status' => ClinicalRecordStatus::Pending,
+            'daily_complaint' => 'Texto que não pode aparecer no relatório',
+            'pain_level' => 9,
         ]);
 
         $response = $this->actingAs($administrator, 'sanctum')

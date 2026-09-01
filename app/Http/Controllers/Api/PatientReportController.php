@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\AuditEventCategory;
+use App\Enums\ClinicalRecordStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Patient;
 use App\Models\PatientAssessment;
@@ -22,10 +23,12 @@ class PatientReportController extends Controller
     {
         $patient->load([
             'assessments' => fn ($query) => $query
+                ->where('status', ClinicalRecordStatus::Completed->value)
                 ->with(['professional', 'attachments'])
                 ->oldest('assessed_at')
                 ->oldest('id'),
             'evolutions' => fn ($query) => $query
+                ->where('status', ClinicalRecordStatus::Completed->value)
                 ->with(['professional', 'attachments'])
                 ->oldest('evolved_at')
                 ->oldest('id'),
@@ -94,7 +97,7 @@ class PatientReportController extends Controller
 
     private function logoDataUri(): ?string
     {
-        $path = public_path('images/fisio1-logo.png');
+        $path = public_path('images/fisio1-logo-white.png');
 
         if (! is_file($path) || ! is_readable($path)) {
             return null;
