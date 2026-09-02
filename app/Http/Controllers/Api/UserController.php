@@ -22,7 +22,15 @@ class UserController extends Controller
 
     public function index(Request $request)
     {
-        return UserResource::collection(User::query()->with('accessGroups.permissions')->latest()->paginate($request->integer('per_page', 15))->withQueryString());
+        $query = User::query()->with('accessGroups.permissions')->latest();
+
+        $query->when($request->filled('search'), fn ($builder) => $builder->where(fn ($search) => $search
+            ->where('name', 'like', '%'.$request->string('search')->trim().'%')
+            ->orWhere('email', 'like', '%'.$request->string('search')->trim().'%')));
+
+        return UserResource::collection(
+            $query->paginate($request->integer('per_page', 15))->withQueryString(),
+        );
     }
 
     public function store(StoreUserRequest $request): UserResource

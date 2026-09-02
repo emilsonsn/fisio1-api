@@ -17,6 +17,8 @@ class ListAuditLogsRequest extends FormRequest
     {
         return [
             'event' => ['nullable', Rule::enum(AuditEventCategory::class)],
+            'events' => ['nullable', 'array', 'min:1'],
+            'events.*' => [Rule::enum(AuditEventCategory::class)],
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
             'date_from' => ['nullable', 'date_format:Y-m-d'],
             'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],

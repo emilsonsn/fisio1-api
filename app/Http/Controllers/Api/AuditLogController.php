@@ -7,7 +7,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\AuditLog\ListAuditLogsRequest;
 use App\Http\Resources\AuditLogResource;
 use App\Models\AuditLog;
+use App\Models\ClinicalRecord;
+use App\Models\PatientAssessment;
+use App\Models\PatientEvolution;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Http\JsonResponse;
 
 class AuditLogController extends Controller
@@ -15,10 +19,18 @@ class AuditLogController extends Controller
     public function index(ListAuditLogsRequest $request)
     {
         $filters = $request->validated();
-        $query = AuditLog::query()->with('user')->latest('created_at')->latest('id');
+        $events = $filters['events'] ?? array_filter([$filters['event'] ?? null]);
+        $query = AuditLog::query()->with([
+            'user',
+            'auditable' => fn (MorphTo $morphTo) => $morphTo->morphWith([
+                PatientAssessment::class => ['patient'],
+                PatientEvolution::class => ['patient'],
+                ClinicalRecord::class => ['patient'],
+            ]),
+        ])->latest('created_at')->latest('id');
 
         $query
-            ->when($filters['event'] ?? null, fn ($builder, string $event) => $builder->where('event', $event))
+            ->when($events, fn ($builder) => $builder->whereIn('event', $events))
             ->when($filters['user_id'] ?? null, fn ($builder, int $userId) => $builder->where('user_id', $userId))
             ->when($filters['date_from'] ?? null, fn ($builder, string $date) => $builder->whereDate('created_at', '>=', $date))
             ->when($filters['date_to'] ?? null, fn ($builder, string $date) => $builder->whereDate('created_at', '<=', $date));

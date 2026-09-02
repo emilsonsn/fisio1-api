@@ -81,6 +81,45 @@ class AuditLogTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_administrator_can_filter_audit_logs_by_multiple_event_categories(): void
+    {
+        $this->seed();
+        $admin = User::query()->where('email', 'andre@fisio1.com.br')->firstOrFail();
+
+        foreach ([AuditEventCategory::Login, AuditEventCategory::Logout, AuditEventCategory::PatientCreated] as $event) {
+            AuditLog::query()->create(['event' => $event, 'user_id' => $admin->id]);
+        }
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/audit-logs?'.http_build_query([
+                'events' => [AuditEventCategory::Login->value, AuditEventCategory::Logout->value],
+            ]))
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.event', AuditEventCategory::Logout->value)
+            ->assertJsonPath('data.1.event', AuditEventCategory::Login->value);
+    }
+
+    public function test_administrator_can_search_users_by_name_or_email(): void
+    {
+        $this->seed();
+        $admin = User::query()->where('email', 'andre@fisio1.com.br')->firstOrFail();
+        User::factory()->create(['name' => 'Marina Auditoria', 'email' => 'marina@example.com']);
+        User::factory()->create(['name' => 'Outro Usuário', 'email' => 'outro@example.com']);
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/users?search=marina&per_page=10')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.email', 'marina@example.com');
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/users?search=outro%40example.com&per_page=10')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.name', 'Outro Usuário');
+    }
+
     public function test_authentication_and_sensitive_user_changes_are_audited_safely(): void
     {
         $this->seed();
@@ -148,5 +187,11 @@ class AuditLogTest extends TestCase
         $this->assertSame(ClinicalRecordStatus::InReview->value, $audit->old_values['status']);
         $this->assertSame(ClinicalRecordStatus::Completed->value, $audit->new_values['status']);
         $this->assertSame('Queixa revisada', $audit->new_values['chief_complaint']);
+
+        $audit->update(['auditable_label' => 'Avaliação #'.$assessment->id]);
+
+        $this->getJson('/api/v1/audit-logs?event='.AuditEventCategory::AssessmentConfirmed->value)
+            ->assertOk()
+            ->assertJsonPath('data.0.auditable.label', 'Avaliação — Paciente em revisão');
     }
 }

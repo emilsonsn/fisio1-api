@@ -68,12 +68,19 @@ class AuditLogger
             $model instanceof AccessGroup => $model->name,
             $model instanceof RecordAttachment,
             $model instanceof ClinicalAttachment => $model->original_name,
-            $model instanceof PatientAssessment => 'Avaliação #'.$model->getKey(),
-            $model instanceof PatientEvolution => 'Evolução #'.$model->getKey(),
-            $model instanceof ClinicalRecord => 'Registro clínico #'.$model->getKey(),
+            $model instanceof PatientAssessment => $this->clinicalDocumentLabel('Avaliação', $model),
+            $model instanceof PatientEvolution => $this->clinicalDocumentLabel('Evolução', $model),
+            $model instanceof ClinicalRecord => $this->clinicalDocumentLabel('Registro clínico', $model),
             $model !== null => class_basename($model).' #'.$model->getKey(),
             default => null,
         };
+    }
+
+    private function clinicalDocumentLabel(string $documentType, Model $model): string
+    {
+        return $model->patient?->name
+            ? $documentType.' — '.$model->patient->name
+            : $documentType.' #'.$model->getKey();
     }
 
     private function sanitize(array $values): array
