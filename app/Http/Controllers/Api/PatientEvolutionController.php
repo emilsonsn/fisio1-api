@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Enums\ClinicalRecordStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ClinicalRecord\CancelClinicalRecordRequest;
+use App\Http\Requests\ClinicalRecord\ListClinicalRecordsRequest;
 use App\Http\Requests\PatientEvolution\StorePatientEvolutionRequest;
 use App\Http\Requests\PatientEvolution\UpdatePatientEvolutionRequest;
 use App\Http\Resources\PatientEvolutionResource;
@@ -16,13 +17,21 @@ use Symfony\Component\HttpFoundation\Response;
 
 class PatientEvolutionController extends Controller
 {
-    public function index(Request $request)
+    public function index(ListClinicalRecordsRequest $request)
     {
+        $filters = $request->validated();
         $query = PatientEvolution::query()->with(['patient', 'professional', 'attachments', 'aiProcess'])->latest('evolved_at');
-        $query->when($request->filled('patient_id'), fn ($q) => $q->where('patient_id', $request->integer('patient_id')))
-            ->when($request->filled('search'), fn ($q) => $q->whereHas('patient', fn ($patient) => $patient->where('name', 'like', '%'.$request->string('search').'%')));
+        $query->when($filters['patient_id'] ?? null, fn ($q, int $patientId) => $q->where('patient_id', $patientId))
+            ->when($filters['search'] ?? null, fn ($q, string $search) => $q->whereHas('patient', fn ($patient) => $patient
+                ->where('name', 'like', '%'.$search.'%')
+                ->orWhere('document', 'like', '%'.$search.'%')
+                ->orWhere('phone', 'like', '%'.$search.'%')
+            ))
+            ->when($filters['status'] ?? null, fn ($q, string $status) => $q->where('status', $status))
+            ->when($filters['date_from'] ?? null, fn ($q, string $date) => $q->whereDate('evolved_at', '>=', $date))
+            ->when($filters['date_to'] ?? null, fn ($q, string $date) => $q->whereDate('evolved_at', '<=', $date));
 
-        return PatientEvolutionResource::collection($query->paginate($request->integer('per_page', 15))->withQueryString());
+        return PatientEvolutionResource::collection($query->paginate($filters['per_page'] ?? 15)->withQueryString());
     }
 
     public function store(StorePatientEvolutionRequest $request): PatientEvolutionResource

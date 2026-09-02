@@ -16,7 +16,13 @@ class PatientController extends Controller
     public function index(Request $request)
     {
         $query = Patient::query()->withCount(['assessments', 'evolutions'])->latest();
-        $query->when($request->filled('search'), fn ($q) => $q->where(fn ($search) => $search->where('name', 'like', '%'.$request->search.'%')->orWhere('document', 'like', '%'.$request->search.'%')->orWhere('phone', 'like', '%'.$request->search.'%')));
+        $query->when(
+            $request->filled('search'),
+            fn ($q) => $q->where(fn ($search) => $search->where('name', 'like', '%'.$request->search.'%')
+                ->orWhere('document', 'like', '%'.$request->search.'%')
+                ->orWhere('phone', 'like', '%'.$request->search.'%')
+            )
+        );
 
         return PatientResource::collection($query->paginate($request->integer('per_page', 15))->withQueryString());
     }

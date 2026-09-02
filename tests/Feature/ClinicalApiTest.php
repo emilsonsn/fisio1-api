@@ -76,6 +76,106 @@ class ClinicalApiTest extends TestCase
         $this->postJson('/api/v1/users', ['name' => 'Profissional de teste', 'email' => 'profissional@example.com', 'password' => 'secret123', 'access_group_ids' => [$groupId]], $headers)->assertCreated()->assertJsonPath('data.access_groups.0.name', 'Consulta');
     }
 
+    public function test_clinical_record_lists_can_be_filtered_by_date_range(): void
+    {
+        $this->seed();
+        $administrator = User::query()->where('email', 'andre@fisio1.com.br')->firstOrFail();
+        $patient = Patient::query()->create([
+            'name' => 'Paciente com registros por data',
+            'document' => '12345678901',
+            'birth_date' => '1990-01-01',
+            'phone' => '85999999999',
+        ]);
+
+        PatientAssessment::query()->create([
+            'patient_id' => $patient->id,
+            'professional_id' => $administrator->id,
+            'assessed_at' => '2026-06-01',
+        ]);
+        PatientAssessment::query()->create([
+            'patient_id' => $patient->id,
+            'professional_id' => $administrator->id,
+            'assessed_at' => '2026-06-15',
+        ]);
+        PatientEvolution::query()->create([
+            'patient_id' => $patient->id,
+            'professional_id' => $administrator->id,
+            'evolved_at' => '2026-06-05',
+        ]);
+        PatientEvolution::query()->create([
+            'patient_id' => $patient->id,
+            'professional_id' => $administrator->id,
+            'evolved_at' => '2026-06-20',
+        ]);
+
+        $this->actingAs($administrator, 'sanctum')
+            ->getJson('/api/v1/assessments?date_from=2026-06-10&date_to=2026-06-15')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.assessed_at', '2026-06-15');
+
+        $this->actingAs($administrator, 'sanctum')
+            ->getJson('/api/v1/evolutions?date_from=2026-06-05&date_to=2026-06-10')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.evolved_at', '2026-06-05');
+    }
+
+    public function test_clinical_record_lists_can_be_filtered_by_patient_search(): void
+    {
+        $this->seed();
+        $administrator = User::query()->where('email', 'andre@fisio1.com.br')->firstOrFail();
+        $patient = Patient::query()->create([
+            'name' => 'Roberto dos Santos Silva',
+            'document' => '08203827799',
+            'birth_date' => '1990-01-01',
+            'phone' => '21983198166',
+        ]);
+        $otherPatient = Patient::query()->create([
+            'name' => 'Outro paciente',
+            'document' => '12345678901',
+            'birth_date' => '1992-01-01',
+            'phone' => '85999999999',
+        ]);
+
+        PatientAssessment::query()->create([
+            'patient_id' => $otherPatient->id,
+            'professional_id' => $administrator->id,
+            'assessed_at' => '2026-08-27',
+        ]);
+        PatientEvolution::query()->create([
+            'patient_id' => $patient->id,
+            'professional_id' => $administrator->id,
+            'evolved_at' => '2026-08-27',
+            'status' => ClinicalRecordStatus::InReview,
+        ]);
+        PatientEvolution::query()->create([
+            'patient_id' => $patient->id,
+            'professional_id' => $administrator->id,
+            'evolved_at' => '2026-08-28',
+            'status' => ClinicalRecordStatus::Completed,
+        ]);
+
+        $this->actingAs($administrator, 'sanctum')
+            ->getJson('/api/v1/evolutions?search=roberto')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.patient.id', $patient->id);
+
+        $this->actingAs($administrator, 'sanctum')
+            ->getJson('/api/v1/evolutions?search=08203827799')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.patient.id', $patient->id);
+
+        $this->actingAs($administrator, 'sanctum')
+            ->getJson('/api/v1/evolutions?patient_id='.$patient->id.'&status=in_review')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.status', ClinicalRecordStatus::InReview->value)
+            ->assertJsonPath('data.0.patient.id', $patient->id);
+    }
+
     public function test_only_an_administrator_is_seeded_with_permission_to_delete_patients(): void
     {
         $this->seed();
