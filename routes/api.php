@@ -111,7 +111,8 @@ Route::prefix('v1')->group(function (): void {
 
         Route::prefix('record-attachments')->group(function (): void {
             Route::get('{recordAttachment}/download', [RecordAttachmentController::class, 'download'])
-                ->middleware('permission:attachments.download');
+                ->middleware('permission:attachments.download')
+                ->name('record-attachments.download');
             Route::delete('{recordAttachment}', [RecordAttachmentController::class, 'destroy'])
                 ->middleware('permission:clinical_records.update');
         });
